@@ -1,1 +1,43 @@
-// Placeholder for index.html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Qix Clone - CRT Retro Edition</title>
+    <link rel="stylesheet" href="styles/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="hud" class="hud">
+      <div class="hud-box">
+        <div id="score">Score: 0</div>
+        <div id="lives">Lives: 3</div>
+        <div id="captured">Captured: 0%</div>
+      </div>
+      <div class="hud-controls">
+        <button id="crt-toggle">CRT: OFF</button>
+        <button id="settings-button">⚙ Settings</button>
+      </div>
+    </div>
+
+    <canvas id="gameCanvas" width="1024" height="768"></canvas>
+
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Settings</h2>
+        <label><input type="checkbox" id="darkMode"> Dark Mode</label>
+        <label><input type="checkbox" id="casualMode"> Casual Mode</label>
+        <label><input type="checkbox" id="crtFilter"> CRT Filter</label>
+        <br />
+        <button id="close-settings">Close</button>
+        <button id="level-up">LEVEL UP!</button>
+      </div>
+    </div>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

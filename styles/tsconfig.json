@@ -1,0 +1,116 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Press+Start+2P&display=swap');
+
+body, html {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #000;
+  font-family: 'Orbitron', 'Press Start 2P', monospace;
+  color: #0ff;
+}
+
+canvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+#hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 2px solid #0ff;
+}
+
+#topRightUI {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+}
+
+#crtToggle,
+#settingsToggle {
+  background-color: #111;
+  color: #0ff;
+  font-weight: bold;
+  font-family: 'Orbitron', monospace;
+  border: 1px solid #0ff;
+  padding: 8px;
+  margin-left: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#settingsModal {
+  display: none;
+  position: absolute;
+  top: 60px;
+  left: 20px;
+  z-index: 1001;
+  background: rgba(0, 0, 0, 0.9);
+  border: 2px solid #0ff;
+  padding: 20px;
+  color: #0ff;
+  border-radius: 12px;
+  font-size: 14px;
+  min-width: 240px;
+}
+
+#settingsModal h2 {
+  font-family: 'Orbitron', monospace;
+  margin-top: 0;
+  font-size: 18px;
+  color: #ff2a6d;
+}
+
+#settingsModal label {
+  display: block;
+  margin: 8px 0;
+}
+
+#settingsModal button {
+  margin-top: 10px;
+  padding: 6px 12px;
+  font-weight: bold;
+  background: #111;
+  border: 1px solid #0ff;
+  color: #0ff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.hidden {
+  display: none;
+}
+
+#levelUpMessage,
+#gameOverMessage {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 32px;
+  font-weight: bold;
+  color: #ff2a6d;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 20px 40px;
+  border-radius: 12px;
+  border: 2px solid #ff2a6d;
+  font-family: 'Orbitron', monospace;
+  text-align: center;
+  animation: flash 1.2s ease-in-out infinite;
+}
+
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

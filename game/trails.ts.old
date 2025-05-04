@@ -1,0 +1,45 @@
+import * as THREE from 'three';
+import { createTrailMaterial } from './materials';
+
+let trailPoints: THREE.Vector3[] = [];
+let trailLine: THREE.Line | null = null;
+let trailMaterial = createTrailMaterial();
+
+export function initTrail(scene: THREE.Scene): void {
+  trailPoints = [];
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+  trailLine = new THREE.Line(geometry, trailMaterial);
+  scene.add(trailLine);
+}
+
+export function updateTrail(scene: THREE.Scene, newPoint: THREE.Vector3): void {
+  trailPoints.push(newPoint.clone());
+
+  const positions = new Float32Array(trailPoints.length * 3);
+  for (let i = 0; i < trailPoints.length; i++) {
+    positions[i * 3] = trailPoints[i].x;
+    positions[i * 3 + 1] = trailPoints[i].y;
+    positions[i * 3 + 2] = trailPoints[i].z;
+  }
+
+  if (trailLine) {
+    trailLine.geometry.dispose();
+    trailLine.geometry = new THREE.BufferGeometry();
+    trailLine.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  } else {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    trailLine = new THREE.Line(geometry, trailMaterial);
+    scene.add(trailLine);
+  }
+}
+
+export function clearTrail(scene: THREE.Scene): void {
+  if (trailLine) {
+    scene.remove(trailLine);
+    trailLine.geometry.dispose();
+    trailLine = null;
+  }
+  trailPoints = [];
+}

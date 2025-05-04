@@ -1,0 +1,88 @@
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: 'Orbitron', sans-serif;
+  background: black;
+  color: cyan;
+}
+
+canvas#gameCanvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  background: black;
+}
+
+#hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 20px;
+  pointer-events: none;
+}
+
+#scoreBox {
+  background: rgba(0, 255, 255, 0.1);
+  border: 2px solid cyan;
+  border-radius: 8px;
+  padding: 10px;
+  pointer-events: auto;
+}
+
+#controls {
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+button {
+  background: black;
+  color: cyan;
+  border: 1px solid cyan;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-family: 'Orbitron', sans-serif;
+  cursor: pointer;
+}
+
+button:hover {
+  background: cyan;
+  color: black;
+}
+
+.modal {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  background: black;
+  border: 2px solid cyan;
+  border-radius: 8px;
+  padding: 20px;
+  color: cyan;
+  font-size: 16px;
+  z-index: 20;
+}
+
+.hidden {
+  display: none;
+}
+
+/* CRT effect (optional) */
+body.crt canvas#gameCanvas {
+  filter: contrast(1.2) brightness(1.1) saturate(1.5);
+}
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+}
+#hud, #settingsToggle, #crtToggle {
+  z-index: 10;
+}

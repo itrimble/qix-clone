@@ -1,0 +1,32 @@
+# Node modules & builds
+node_modules/
+dist/
+*.log
+
+# TypeScript outputs & IDE files
+*.tsbuildinfo
+*.bak
+*.js
+
+# Diagnostic scripts
+*.sh
+*.zip
+*.log
+qix_debug_*/
+fix-*.js
+*_diagnostic*.sh
+*_debug*.sh
+patch_*.sh
+rewrite_*.sh
+gather_*.sh
+
+# Mac system files
+.DS_Store
+
+# VSCode config (optional)
+.vscode/
+
+# Ignore canvas/CRT debug output
+ui/*.js
+game/*.bak
+
