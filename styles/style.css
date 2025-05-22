@@ -40,6 +40,14 @@ canvas#gameCanvas {
   pointer-events: auto; /* Catch clicks on the box */
 }
 
+.hud-box div {
+  margin-bottom: 8px; /* Spacing between HUD items */
+  padding: 2px 0;   /* A bit of vertical padding within each item */
+}
+.hud-box div:last-child {
+  margin-bottom: 0;
+}
+
 .hud-controls {
   display: flex;
   gap: 10px;
@@ -163,4 +171,39 @@ body.dark-mode .modal {
     align-items: flex-start;
     gap: 10px;
   }
+}
+
+/* Feedback Message Styling */
+#feedback-message-container {
+  position: fixed;
+  top: 50px; /* Adjusted for a bit more space from top */
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 25px; /* Slightly larger padding */
+  background: rgba(0, 0, 0, 0.85); 
+  color: #00ffff; /* Cyan */
+  border: 2px solid #00ffff;
+  border-radius: 8px; /* Consistent with other elements */
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.6em; /* Slightly larger */
+  z-index: 1001; 
+  display: none; /* Controlled by JS */
+  text-align: center;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+  opacity: 0; /* Start hidden, JS will fade in */
+  transition: opacity 0.3s ease-out; /* Smooth fade transition */
+}
+
+#flash-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  /* backgroundColor is set by JS */
+  z-index: 2000; 
+  display: none; /* Controlled by JS */
+  pointer-events: none;
+  opacity: 0; /* Start hidden, JS will fade in */
+  transition: opacity 0.1s ease-out; /* Fast flash transition */
 }
