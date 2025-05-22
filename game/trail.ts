@@ -34,13 +34,6 @@ export function initTrail(scene: THREE.Scene): void {
  * Updates the trail with a new point.
  */
 export function updateTrail(scene: THREE.Scene, newPoint: THREE.Vector3): void {
-  // Check if trail exists
-  if (!trailLine) {
-    console.warn('Trail not initialized, creating it now');
-    initTrail(scene);
-    return;
-  }
-  
   // Add the new point to our points array
   trailPoints.push(newPoint.clone());
   

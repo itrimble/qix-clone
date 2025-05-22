@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { initControls, keys } from './ui/controls';
-import { initTrail, updateTrail } from './game/trail';
+import { initTrail, updateTrail, clearTrail } from './game/trail';
 import { createScene, updateScene, player } from './game/engine';
 
 // Global variables
@@ -10,6 +10,7 @@ let renderer: THREE.WebGLRenderer;
 let canvas: HTMLCanvasElement;
 let lastTime = performance.now();
 let running = true;
+let spacebarWasPressed = false;
 
 // Debug info display
 function createDebugInfo() {
@@ -124,6 +125,14 @@ function animate() {
   
   // Update game state
   updateScene(scene);
+  
+  // Check for spacebar press to start/clear trail
+  if (keys[' '] && !spacebarWasPressed) {
+    clearTrail(scene); // Clear existing trail
+    initTrail(scene);  // Start a new one
+    // console.log('Spacebar pressed, trail cleared and re-initialized.'); // Optional: for debugging
+  }
+  spacebarWasPressed = keys[' ']; // Update state for next frame
   
   // Update trail with current player position
   updateTrail(scene, player.position);
