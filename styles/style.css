@@ -207,3 +207,72 @@ body.dark-mode .modal {
   opacity: 0; /* Start hidden, JS will fade in */
   transition: opacity 0.1s ease-out; /* Fast flash transition */
 }
+
+/* Game Over Screen Styling */
+#game-over-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.85); /* Semi-transparent black overlay */
+  z-index: 1500; /* Above HUD and feedback messages, below other potential system modals if any */
+  display: flex; /* Used to center content */
+  align-items: center;
+  justify-content: center;
+  /* .hidden class will take care of display: none !important; */
+}
+
+.game-over-content {
+  font-family: 'Orbitron', sans-serif;
+  text-align: center;
+  background-color: rgba(10, 0, 0, 0.9); /* Dark, slightly reddish background */
+  padding: 40px 60px;
+  border-radius: 10px;
+  border: 3px solid #cc0000; /* Dark red border */
+  box-shadow: 0 0 30px rgba(255, 0, 0, 0.7); /* Red glow */
+  color: #ff3333; /* Main text color - a lighter red */
+}
+
+.game-over-content h1 {
+  font-size: 3.5em; /* Large "GAME OVER" text */
+  color: #ff0000; /* Bright red */
+  margin-top: 0;
+  margin-bottom: 20px;
+  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000; /* Neon glow effect */
+}
+
+.game-over-content p {
+  font-size: 1.8em;
+  color: #ffffff; /* White for readability */
+  margin-bottom: 30px;
+}
+
+#final-score {
+  color: #ffff00; /* Bright yellow for score */
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+#restart-button {
+  background: #660000; /* Dark red background */
+  color: #ffcccc;     /* Light pink/red text */
+  border: 2px solid #ff0000; /* Bright red border */
+  padding: 12px 25px;
+  font-size: 1.2em;
+  border-radius: 5px;
+  font-family: 'Orbitron', sans-serif;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
+}
+
+#restart-button:hover {
+  background: #ff0000; /* Bright red on hover */
+  color: #000000;     /* Black text on hover */
+  box-shadow: 0 0 15px #ff0000;
+}
+
+#restart-button:active {
+  transform: scale(0.97);
+  background: #cc0000;
+}

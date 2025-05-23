@@ -1,7 +1,7 @@
 // Completely revised controls.ts
 
 import * as THREE from 'three';
-import { player, saveGameState, toggleC64Mode } from '../game/engine'; // Added saveGameState and toggleC64Mode
+import { player, saveGameState, toggleC64Mode, triggerGameReset } from '../game/engine'; // Added triggerGameReset
 
 // Directly expose the keys object
 export const keys: Record<string, boolean> = {};
@@ -149,6 +149,20 @@ export function initControls(canvas: HTMLCanvasElement, scene: THREE.Scene, came
       newBtn.addEventListener('click', () => {
         console.log('Level up!');
         toggleSettings(); // Close settings when leveling up
+      });
+    }
+
+    // Restart button on Game Over screen
+    const restartButton = document.getElementById('restart-button');
+    if (restartButton) {
+      const gameOverScreen = document.getElementById('game-over-screen');
+      restartButton.addEventListener('click', async () => {
+        if (gameOverScreen) {
+          gameOverScreen.classList.add('hidden');
+        }
+        await triggerGameReset(); // Call the reset function from engine
+        // Music is restarted within triggerGameReset
+        canvas.focus(); // Re-focus canvas after UI interaction
       });
     }
     

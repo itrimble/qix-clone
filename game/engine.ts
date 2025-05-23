@@ -98,6 +98,7 @@ interface GameSaveState {
   };
   score: number;
   currentLevel: number;
+  lives: number; // Add lives to save state
 }
 
 export function saveGameState(): void {
@@ -113,6 +114,7 @@ export function saveGameState(): void {
     },
     score: levelManager.getCurrentScore(),
     currentLevel: levelManager.getCurrentLevel(),
+    lives: levelManager.getCurrentLives(), // Save current lives
   };
 
   try {
@@ -148,36 +150,48 @@ export function loadGameState(): void {
 
       if (typeof state.score === 'number') {
         levelManager.score = state.score;
-        // Update display if needed, LevelManager does this on score change
-        document.getElementById('score-display')!.textContent = `Score: ${levelManager.score}`;
+        // Update display if needed, LevelManager handles its own score display updates
+        // The ID 'score-display' was an old one, it's 'score' now.
+        // LevelManager.update() or advanceToLevel() should handle this.
+        // const scoreElement = document.getElementById('score');
+        // if (scoreElement) scoreElement.textContent = `Score: ${levelManager.score}`;
       }
+
+      if (typeof state.lives === 'number' && state.lives >= 0) {
+        levelManager.lives = state.lives;
+      } else {
+        levelManager.lives = 3; // Default to 3 lives if not in save or invalid
+      }
+      // No direct method in LevelManager to just update display, 
+      // but it gets updated on construction and on collision.
+      // Forcing an update here after loading to be sure.
+      const livesElement = document.getElementById('lives');
+      if (livesElement) livesElement.textContent = `Lives: ${levelManager.lives}`;
       
       if (typeof state.currentLevel === 'number' && state.currentLevel >= 1) {
-        // Ensure level manager loads the correct enemy setup etc. for the loaded level
         levelManager.advanceToLevel(state.currentLevel);
-        // Avoid showing "Level 1!" message if it's part of loading a fresh game state that starts at 1
-        if (state.currentLevel === 1 && state.score === 0) { 
-          // This is tricky, advanceToLevel itself has logic for level 1 message.
-          // For now, this is okay, the message logic in advanceToLevel tries to be smart.
-        }
       } else {
-        // If no valid level in save, ensure level 1 is (re)started
-        levelManager.advanceToLevel(1);
+        levelManager.advanceToLevel(1); // Default to level 1
       }
-      console.log(`Loaded score: ${levelManager.getCurrentScore()}, level: ${levelManager.getCurrentLevel()}`);
-      // showFeedbackMessage("Game Loaded", 1500); // Optional: if explicit load feedback is desired
+      
+      console.log(`Loaded score: ${levelManager.getCurrentScore()}, level: ${levelManager.getCurrentLevel()}, lives: ${levelManager.getCurrentLives()}`);
 
     } else {
       console.log('No saved game state found. Starting fresh.');
-      // Ensure level 1 starts if no save data, advanceToLevel handles this.
-      // It will also show "Level 1" message if we make it conditional there.
-      if (levelManager) levelManager.advanceToLevel(1);
+      levelManager.lives = 3; // Ensure fresh start has 3 lives
+      const livesElement = document.getElementById('lives');
+      if (livesElement) livesElement.textContent = `Lives: ${levelManager.lives}`;
+      if (levelManager) levelManager.advanceToLevel(1); // This also updates score/level display
     }
   } catch (error) {
     console.error('Error loading game state:', error);
     showFeedbackMessage("Error Loading Save!", 2000);
-    // In case of error, also ensure a fresh start at level 1
-    if (levelManager) levelManager.advanceToLevel(1);
+    if (levelManager) {
+        levelManager.lives = 3; // Reset to default on error
+        const livesElement = document.getElementById('lives');
+        if (livesElement) livesElement.textContent = `Lives: ${levelManager.lives}`;
+        levelManager.advanceToLevel(1);
+    }
   }
 }
 
@@ -360,5 +374,30 @@ export function onWindowResize(width: number, height: number): void {
     }
     if (c64ShaderPass) {
         c64ShaderPass.uniforms.resolution.value.set(width, height);
+    }
+}
+
+// Function to trigger a game reset from UI
+export async function triggerGameReset(): Promise<void> { // Make function async
+    if (levelManager) {
+        levelManager.resetGameState(); // Resets lives, score, level, player pos, enemies
+        
+        // Music restart is handled here as LevelManager might stop music on game over
+        // and resetGameState doesn't automatically restart it.
+        try {
+            const sound = await import('../sound/sound'); // Dynamic import for sound
+            sound.playStandardMusic(); 
+            console.log("Game reset triggered from engine, music restarted.");
+        } catch (error) {
+            console.error("Error restarting music after game reset:", error);
+        }
+    }
+    // Ensure game over screen is hidden by UI controls if not already.
+    const gameOverScreen = document.getElementById('game-over-screen');
+    if (gameOverScreen && !gameOverScreen.classList.contains('hidden')) {
+        // This ideally should be handled by the UI that showed it,
+        // but as a fallback or if reset is triggered by other means.
+        // gameOverScreen.classList.add('hidden'); 
+        // Decided against this here; let ui/controls.ts manage hiding it.
     }
 }
