@@ -69,3 +69,10 @@ export function clearTrail(scene: THREE.Scene): void {
   }
   trailPoints = [];
 }
+
+/**
+ * Returns a copy of the current trail points.
+ */
+export function getTrailPoints(): THREE.Vector3[] {
+  return trailPoints.map(p => p.clone());
+}
