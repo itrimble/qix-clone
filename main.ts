@@ -1,10 +1,19 @@
 import * as THREE from 'three';
 import { initControls, keys } from './ui/controls';
 import { initTrail, updateTrail, clearTrail, getTrailPoints } from './game/trail';
-import { createScene, updateScene, player } from './game/engine';
+import {
+  createScene,
+  updateScene,
+  player,
+  isC64ModeActive, // If needed
+  getComposerSize as engineOnWindowResize, // If needed
+  onWindowResize, // If needed
+  getComposer // If needed
+} from './game/engine';
+import { loadSounds, playStandardMusic } from './sound/sound';
 
 // Global variables
-let scene: THREE.Scene;
+let scene: THREE.Scene; 
 let camera: THREE.PerspectiveCamera;
 let renderer: THREE.WebGLRenderer;
 let canvas: HTMLCanvasElement;
@@ -181,8 +190,8 @@ function animate() {
   
   requestAnimationFrame(animate);
   
-  // Update game state
-  updateScene(scene);
+  // Update game state - pass scene, camera, renderer explicitly
+  updateScene(scene, camera, renderer);
   
   // Check for spacebar press to start drawing
   if (keys[' '] && !spacebarWasPressed && !isDrawing) { // Check !isDrawing to prevent re-triggering
@@ -331,7 +340,12 @@ function animate() {
   updateHUD();
   
   // Render the scene
-  renderer.render(scene, camera);
+  const composer = getComposer();
+  if (isC64ModeActive && composer) {
+    composer.render();
+  } else {
+    renderer.render(scene, camera);
+  }
   
   // Update debug info
   const now = performance.now();
@@ -358,6 +372,9 @@ function handleResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  
+  // Also update engine's composer/shader uniforms if it's handling resize
+  engineOnWindowResize(window.innerWidth, window.innerHeight);
 }
 
 // Create debug overlay
@@ -388,6 +405,9 @@ window.onload = () => {
   scene = sceneResult.scene;
   camera = sceneResult.camera;
   renderer = sceneResult.renderer;
+
+  // Set pixel ratio for sharper images on high DPI displays
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   
   // Initialize controls
   console.log('Setting up controls...');
@@ -403,6 +423,14 @@ window.onload = () => {
   // Enhance modal interaction
   console.log('Enhancing modal interaction...');
   enhanceModalInteraction();
+
+  // Load sounds
+  console.log('Loading sounds...');
+  loadSounds();
+
+  // Start background music
+  console.log('Starting background music...');
+  playStandardMusic(); // Start with standard music
   
   // Expose game state globally for debugging
   (window as any).gameState = gameState;
