@@ -173,108 +173,85 @@ body.dark-mode .modal {
   }
 }
 
-/* Feedback Message Styling */
-#feedback-message-container {
-  position: fixed;
-  top: 50px; /* Adjusted for a bit more space from top */
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12px 25px; /* Slightly larger padding */
-  background: rgba(0, 0, 0, 0.85); 
-  color: #00ffff; /* Cyan */
-  border: 2px solid #00ffff;
-  border-radius: 8px; /* Consistent with other elements */
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.6em; /* Slightly larger */
-  z-index: 1001; 
-  display: none; /* Controlled by JS */
-  text-align: center;
-  box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
-  opacity: 0; /* Start hidden, JS will fade in */
-  transition: opacity 0.3s ease-out; /* Smooth fade transition */
-}
-
-#flash-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  /* backgroundColor is set by JS */
-  z-index: 2000; 
-  display: none; /* Controlled by JS */
-  pointer-events: none;
-  opacity: 0; /* Start hidden, JS will fade in */
-  transition: opacity 0.1s ease-out; /* Fast flash transition */
-}
-
-/* Game Over Screen Styling */
-#game-over-screen {
+/* Game Over Screen Styling - Enhanced Version */
+#game-over-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.85); /* Semi-transparent black overlay */
-  z-index: 1500; /* Above HUD and feedback messages, below other potential system modals if any */
-  display: flex; /* Used to center content */
-  align-items: center;
+  background-color: rgba(0, 0, 0, 0.75); /* Semi-transparent black overlay */
+  display: flex;
   justify-content: center;
-  /* .hidden class will take care of display: none !important; */
+  align-items: center;
+  z-index: 2000;
+  font-family: 'Press Start 2P', monospace;
+  color: #ffffff; /* Default text color for the overlay box, if not overridden */
 }
 
-.game-over-content {
-  font-family: 'Orbitron', sans-serif;
+#game-over-box {
+  background-color: #000000;
+  padding: 30px 40px;
+  border: 3px solid #00ffff;
+  box-shadow: 0 0 15px #00ffff, 0 0 10px #00ffff inset; /* Adjusted glow for better visibility */
   text-align: center;
-  background-color: rgba(10, 0, 0, 0.9); /* Dark, slightly reddish background */
-  padding: 40px 60px;
-  border-radius: 10px;
-  border: 3px solid #cc0000; /* Dark red border */
-  box-shadow: 0 0 30px rgba(255, 0, 0, 0.7); /* Red glow */
-  color: #ff3333; /* Main text color - a lighter red */
+  min-width: 320px; /* Ensure it's wide enough for text */
+  max-width: 90%;   /* Prevent it from being too wide on large screens */
 }
 
-.game-over-content h1 {
-  font-size: 3.5em; /* Large "GAME OVER" text */
-  color: #ff0000; /* Bright red */
-  margin-top: 0;
-  margin-bottom: 20px;
-  text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000; /* Neon glow effect */
+#game-over-title {
+  font-size: 2.8em; /* Slightly adjusted for typical screen sizes */
+  color: #ff0000;
+  text-shadow: 2px 2px #ddcc00; /* Darker yellow for shadow */
+  margin-bottom: 25px;
+  line-height: 1.2; /* In case GAME OVER wraps, ensure good spacing */
 }
 
-.game-over-content p {
-  font-size: 1.8em;
-  color: #ffffff; /* White for readability */
-  margin-bottom: 30px;
+#game-over-box p {
+  font-size: 1.1em; /* Adjusted for readability */
+  margin: 12px 0;
 }
 
-#final-score {
-  color: #ffff00; /* Bright yellow for score */
+#game-over-box p span {
+  color: #ffff00;
   font-weight: bold;
-  font-size: 1.1em;
 }
 
 #restart-button {
-  background: #660000; /* Dark red background */
-  color: #ffcccc;     /* Light pink/red text */
-  border: 2px solid #ff0000; /* Bright red border */
-  padding: 12px 25px;
-  font-size: 1.2em;
-  border-radius: 5px;
-  font-family: 'Orbitron', sans-serif;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 1.1em; /* Adjusted */
+  background-color: #0000dd; /* Slightly different blue */
+  color: #ffff00;
+  padding: 12px 22px; /* Adjusted padding */
+  border: 2px solid #ffff00;
+  box-shadow: 0 0 8px #ffff00;
   cursor: pointer;
-  transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
+  margin-top: 30px; /* More space above button */
+  text-decoration: none;
+  display: inline-block;
+  transition: background-color 0.2s, box-shadow 0.2s, color 0.2s; /* Smooth transition */
 }
 
-#restart-button:hover {
-  background: #ff0000; /* Bright red on hover */
-  color: #000000;     /* Black text on hover */
-  box-shadow: 0 0 15px #ff0000;
+#restart-button:hover,
+#restart-button:focus { /* Added focus for accessibility */
+  background-color: #0000aa;
+  box-shadow: 0 0 15px #ffffff, 0 0 10px #ffff00 inset;
+  color: #ffffff;
+  outline: none; /* Remove default focus outline if custom is good */
 }
 
-#restart-button:active {
-  transform: scale(0.97);
-  background: #cc0000;
+/* Optional: Style for dimming/blurring canvas when game over is active */
+.game-canvas-paused {
+  filter: blur(3px) brightness(0.6);
+  transition: filter 0.3s ease-out; /* Smooth transition for the filter */
+}
+
+.stats-divider {
+  margin-top: 20px; /* More space before separator */
+  margin-bottom: 10px; /* More space after separator */
+  color: #00ffff; /* Cyan */
+  font-size: 1em;  /* Slightly larger for visibility */
+  letter-spacing: 1px;
 }
 
 /* On-screen Touch Controls */
