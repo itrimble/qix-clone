@@ -55,7 +55,7 @@ function segmentsIntersect(p1: THREE.Vector2, q1: THREE.Vector2, p2: THREE.Vecto
          return true;
      }
   }
-  
+
   // Special Cases for collinearity:
   // Check if segments are collinear and overlap.
   // o1, o2, o3, o4 are orientations. If any three points are collinear, one of these will be 0.
@@ -64,11 +64,115 @@ function segmentsIntersect(p1: THREE.Vector2, q1: THREE.Vector2, p2: THREE.Vecto
   if (o2 === 0 && onSegment(p1, q2, q1)) return true; // p1, q1, q2 are collinear and q2 lies on segment p1q1
   if (o3 === 0 && onSegment(p2, p1, q2)) return true; // p2, q2, p1 are collinear and p1 lies on segment p2q2
   if (o4 === 0 && onSegment(p2, q1, q2)) return true; // p2, q2, q1 are collinear and q1 lies on segment p2q2
-  
+
   return false; // Doesn't fall in any of the above cases
 }
 
 // --- End Intersection Detection Utilities ---
+
+// --- Qix Polygon Calculation Utilities ---
+const blCorner = new THREE.Vector2(-gridLimit, -gridLimit);
+const brCorner = new THREE.Vector2(gridLimit, -gridLimit);
+const trCorner = new THREE.Vector2(gridLimit, gridLimit);
+const tlCorner = new THREE.Vector2(-gridLimit, gridLimit);
+const orderedCorners = [blCorner, brCorner, trCorner, tlCorner]; // Clockwise order
+
+function getSegmentForPoint(point: THREE.Vector2, gl: number): number {
+  if (point.y === -gl && point.x > -gl && point.x < gl) return 0; // Bottom (exclusive of corners)
+  if (point.x === gl && point.y > -gl && point.y < gl) return 1;  // Right (exclusive of corners)
+  if (point.y === gl && point.x < gl && point.x > -gl) return 2;   // Top (exclusive of corners)
+  if (point.x === -gl && point.y < gl && point.y > -gl) return 3; // Left (exclusive of corners)
+
+  // Handle corners: assign to the segment they start in CW order
+  if (point.equals(blCorner)) return 0; // Belongs to bottom segment start
+  if (point.equals(brCorner)) return 1; // Belongs to right segment start
+  if (point.equals(trCorner)) return 2; // Belongs to top segment start
+  if (point.equals(tlCorner)) return 3; // Belongs to left segment start
+  console.warn(`Point ${point.x},${point.y} is not on boundary or corner.`);
+  return -1; // Should not happen if point is on boundary
+}
+
+function getBoundaryPath(p1: THREE.Vector2, p2: THREE.Vector2, isClockwise: boolean, gl: number): THREE.Vector2[] {
+  const path: THREE.Vector2[] = [p1.clone()]; // Start with a clone of p1
+  let currentSeg = getSegmentForPoint(p1, gl);
+  const targetSeg = getSegmentForPoint(p2, gl);
+
+  if (p1.equals(p2)) return [p1.clone()]; // Path of zero length if points are same
+
+  // Check if p1 or p2 are not on a segment (e.g. error in input or getSegmentForPoint)
+  if (currentSeg === -1) {
+    console.error("getBoundaryPath: p1 is not on a valid segment", p1);
+    return [p1.clone()]; // Return p1 to avoid further errors
+  }
+   if (targetSeg === -1) {
+    console.error("getBoundaryPath: p2 is not on a valid segment", p2);
+    // Depending on desired robustness, could return path with p1, or p1 and p2.
+    // For now, just add p2 and hope for the best or let downstream handle it.
+    path.push(p2.clone());
+    return path;
+  }
+
+  for (let i = 0; i < 8; i++) { // Max 4 segments + some buffer for complex cases/loops
+    if (currentSeg === targetSeg) {
+        // If p1 and p2 are on the same segment.
+        // If clockwise, p1 must be "before" p2 or at the same spot.
+        // If counter-clockwise, p1 must be "after" p2 or at the same spot.
+        // This simplified version assumes this condition is met or points are distinct enough.
+        // No intermediate corners are needed if they are on the same segment and path direction is valid.
+        break;
+    }
+
+    let cornerToAdd: THREE.Vector2;
+    if (isClockwise) {
+      cornerToAdd = orderedCorners[(currentSeg + 1) % 4];
+      currentSeg = (currentSeg + 1) % 4;
+    } else { // Counter-clockwise
+      cornerToAdd = orderedCorners[currentSeg];
+      currentSeg = (currentSeg + 3) % 4; // Move to previous segment (wraps around)
+    }
+    path.push(cornerToAdd.clone());
+    if (cornerToAdd.equals(p2)) break;
+    if (path.length > 6) { // Safety break for unexpected loops
+        console.error("getBoundaryPath exceeded max iterations, something is wrong.", p1, p2, isClockwise);
+        break;
+    }
+  }
+
+  if (!path[path.length-1].equals(p2)) {
+    path.push(p2.clone());
+  }
+  return path;
+}
+
+function calculateQixPolygons(playerTrail: THREE.Vector2[], gl: number): { polygon1: THREE.Vector2[], polygon2: THREE.Vector2[] } {
+  if (playerTrail.length < 2) {
+    console.warn("calculateQixPolygons: Player trail too short.");
+    return { polygon1: [], polygon2: [] }; // Not enough points
+  }
+  const startTrailNode = playerTrail[0];
+  const endTrailNode = playerTrail[playerTrail.length - 1];
+
+  // Path along boundary, clockwise from end to start
+  const boundaryPathCW = getBoundaryPath(endTrailNode, startTrailNode, true, gl);
+  // Path along boundary, counter-clockwise from end to start
+  const boundaryPathCCW = getBoundaryPath(endTrailNode, startTrailNode, false, gl);
+
+  // Polygon 1: Player's trail + clockwise path along boundary
+  const polygon1Vertices = [...playerTrail.map(p=>p.clone()), ...boundaryPathCW.slice(1)];
+
+  // Polygon 2: Player's trail + counter-clockwise path along boundary
+  const polygon2Vertices = [...playerTrail.map(p=>p.clone()), ...boundaryPathCCW.slice(1)];
+
+  if (polygon1Vertices.length > 1 && polygon1Vertices[polygon1Vertices.length - 1].equals(polygon1Vertices[0])) {
+     polygon1Vertices.pop();
+  }
+  if (polygon2Vertices.length > 1 && polygon2Vertices[polygon2Vertices.length - 1].equals(polygon2Vertices[0])) {
+     polygon2Vertices.pop();
+  }
+
+  return { polygon1: polygon1Vertices, polygon2: polygon2Vertices };
+}
+// --- End Qix Polygon Calculation Utilities ---
 
 // Debug info display
 function createDebugInfo() {
@@ -207,89 +311,77 @@ function animate() {
 
       if (playerTrailFull.length < 2) {
         console.log("Trail too short to capture.");
-        clearTrail(scene); // Clear the short trail
-        // return or continue; // Exit this block if inside a larger if/else
+        // No trail to clear as it's too short or already cleared by self-intersection.
       } else {
-        const playerTrail = playerTrailFull.map(p => new THREE.Vector2(p.x, p.y)); // Convert to Vector2 for Shape/Area
+        const playerTrailVec2 = playerTrailFull.map(p => new THREE.Vector2(p.x, p.y));
 
-        // const startPoint = playerTrail[0];
-        // const endPoint = playerTrail[playerTrail.length - 1];
+        const { polygon1, polygon2 } = calculateQixPolygons(playerTrailVec2, gridLimit);
 
-        // Define boundary corners (as Vector2 for simplicity here)
-        // const tl = new THREE.Vector2(-gridLimit, gridLimit);
-        // const tr = new THREE.Vector2(gridLimit, gridLimit);
-        // const bl = new THREE.Vector2(-gridLimit, -gridLimit);
-        // const br = new THREE.Vector2(gridLimit, -gridLimit);
-
-        // Simplified polygon formation:
-        // This creates two polygons by connecting the trail ends to the top-left/top-right
-        // and bottom-left/bottom-right corners of the screen, respectively.
-        // This is a major simplification and will only work correctly for specific trail shapes.
-
-        // const poly1Vertices = [...playerTrail]; // Path from start to end
-        // Logic to decide which corners to add for poly1
-        // This part is complex. For a first pass, let's assume a simple case:
-        // Trail from left wall to right wall.
-        // Poly1 (top part): trail + tr + tl
-        // Poly2 (bottom part): trail + br + bl (but trail needs to be reversed for winding order for Poly2)
-
-        // Simplified: create one polygon using player trail and two fixed corners (e.g. top-right, top-left)
-        // This won't correctly implement the "smaller area" rule yet.
-        // The goal here is to get *any* shape filled based on the trail.
-
-        // let verticesForShape: THREE.Vector2[] = [...playerTrail];
-        // Example: if trail ends on right wall, add tr, then tl. This is naive.
-        // A proper solution requires checking which boundary segments the start/end points are on
-        // and then adding the correct corners to close the shape.
-
-        // For this subtask, let's create a simple polygon by closing the trail
-        // with a line segment directly from endPoint back to startPoint.
-        // This will fill the area enclosed by the trail itself, not Qix-style area capture yet.
-        // This is to test the Shape/Mesh creation.
-        if (playerTrail.length >= 3) { // Need at least 3 points for a shape
-          const shape = new THREE.Shape(playerTrail); // Use the trail itself as the shape
-          
-          // --- Start of Area Calculation & Game State Update ---
-          const filledArea = THREE.ShapeUtils.area(playerTrail);
-          
-          if (filledArea > 0) { // Only update if area is positive (valid polygon)
-            const newlyCapturedPercent = (filledArea / totalGameArea) * 100;
-            gameState.captured += newlyCapturedPercent;
-            // Ensure captured doesn't go way over 100 due to multiple small captures summing up with floating point issues
-            gameState.captured = Math.min(gameState.captured, 100); 
-
-            gameState.score += Math.round(filledArea); // Or some other score metric
-
-            console.log(`Filled Area: ${filledArea.toFixed(2)}`);
-            console.log(`Newly Captured Percent: ${newlyCapturedPercent.toFixed(2)}%`);
-            console.log(`Total Captured: ${gameState.captured.toFixed(2)}%`);
-            console.log(`Score: ${gameState.score}`);
-          } else {
-            console.log("Filled area is zero or negative, not updating game state.");
-          }
-          // --- End of Area Calculation & Game State Update ---
-
-          const geometry = new THREE.ShapeGeometry(shape);
-          const material = new THREE.MeshPhongMaterial({ color: 0x0000ff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
-          const capturedMesh = new THREE.Mesh(geometry, material);
-          scene.add(capturedMesh);
-          capturedAreas.push(capturedMesh);
-          // console.log('Captured a shape (trail loop). Area calculation done.'); // Updated log
+        if (polygon1.length < 3 || polygon2.length < 3) {
+          console.error("Invalid polygons returned from calculation. Skipping capture.");
         } else {
-          console.log("Trail not long enough to form a shape for this simplified fill.");
+          let chosenPolygonVertices: THREE.Vector2[] | null = null;
+          let actualFilledArea = 0;
+
+          const area1 = THREE.ShapeUtils.area(polygon1); // Already checked length >= 3
+          const area2 = THREE.ShapeUtils.area(polygon2);
+
+          console.log(`Calculated Polygon Areas: Area1=${area1.toFixed(2)}, Area2=${area2.toFixed(2)}`);
+
+          const absArea1 = Math.abs(area1);
+          const absArea2 = Math.abs(area2);
+
+          if (absArea1 > 0 && (absArea1 <= absArea2 || absArea2 === 0)) {
+            chosenPolygonVertices = [...polygon1];
+            actualFilledArea = absArea1;
+            if (area1 < 0) { // Ensure CCW winding for THREE.Shape
+              chosenPolygonVertices.reverse();
+              console.log("Polygon 1 chosen and reversed for CCW winding.");
+            } else {
+              console.log("Polygon 1 chosen.");
+            }
+          } else if (absArea2 > 0) {
+            chosenPolygonVertices = [...polygon2];
+            actualFilledArea = absArea2;
+            if (area2 < 0) { // Ensure CCW winding for THREE.Shape
+              chosenPolygonVertices.reverse();
+              console.log("Polygon 2 chosen and reversed for CCW winding.");
+            } else {
+              console.log("Polygon 2 chosen.");
+            }
+          } else {
+            console.log("Neither polygon has a valid area for capture.");
+          }
+
+          if (chosenPolygonVertices && actualFilledArea > 0) {
+            console.log(`Selected polygon with area: ${actualFilledArea.toFixed(2)}`);
+
+            const shape = new THREE.Shape(chosenPolygonVertices);
+            const geometry = new THREE.ShapeGeometry(shape);
+            const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }); // Changed color for testing
+            const capturedMesh = new THREE.Mesh(geometry, material);
+            scene.add(capturedMesh);
+            capturedAreas.push(capturedMesh);
+
+            const newlyCapturedPercent = (actualFilledArea / totalGameArea) * 100;
+            gameState.captured += newlyCapturedPercent;
+            gameState.captured = Math.min(gameState.captured, 100);
+            gameState.score += Math.round(actualFilledArea); // Or some other score metric
+            console.log(`(Updated GS) Filled Area: ${actualFilledArea.toFixed(2)}, New %: ${newlyCapturedPercent.toFixed(2)}, Total %: ${gameState.captured.toFixed(2)}, Score: ${gameState.score}`);
+          } else {
+            console.log("No valid polygon chosen for capture. No area filled.");
+          }
         }
-        
-        clearTrail(scene); // Clear the trail that was just processed
       }
+      clearTrail(scene); // Clear the drawing line trail regardless of capture success
       // --- End of Capture Logic ---
     } else {
       console.log('Drawing finished in open space (not on a boundary). Trail cleared.');
       clearTrail(scene); // Clear incomplete trail
     }
   }
-
   spacebarWasPressed = keys[' ']; // Update state for next frame
-  
+
   // Update trail with current player position only if drawing
   if (isDrawing) {
     updateTrail(scene, player.position);
@@ -314,7 +406,7 @@ function animate() {
           isDrawing = false; // Stop drawing
           clearTrail(scene);  // Clear the offending trail
           // updateHUD(); // updateHUD is called every frame anyway, but if not, call here
-          
+
           if (gameState.lives <= 0) {
             console.log("GAME OVER - No lives left.");
             running = false; // Stop the game loop
