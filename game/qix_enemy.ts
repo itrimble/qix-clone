@@ -127,4 +127,20 @@ export class QixEnemy {
     this.updateLineGeometry();
     console.log("Qix Reset.");
   }
+
+  public setConfinement(newConfinement: { minX: number, maxX: number, minY: number, maxY: number }): void {
+    this.confinement = { ...newConfinement };
+    console.log("QixEnemy internal confinement updated to:", this.confinement);
+
+    const preClampX = this.position.x;
+    const preClampY = this.position.y;
+
+    this.position.x = Math.max(this.confinement.minX, Math.min(this.confinement.maxX, this.position.x));
+    this.position.y = Math.max(this.confinement.minY, Math.min(this.confinement.maxY, this.position.y));
+
+    if (this.position.x !== preClampX || this.position.y !== preClampY) {
+       console.log("QixEnemy position clamped within new confinement by setConfinement.");
+    }
+    this.updateLineGeometry();
+  }
 }

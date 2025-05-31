@@ -56,6 +56,9 @@ let timeTrailOpen: number = 0.0;
 const FUSE_ACTIVATION_DELAY_SECONDS: number = 3.0;
 let fuseActiveOnTrail: boolean = false;
 
+// Qix Confinement
+let qixConfinementRect: { minX: number, maxX: number, minY: number, maxY: number };
+
 // --- Intersection Detection Utilities ---
 
 // Helper function to find orientation of ordered triplet (p, q, r).
@@ -435,12 +438,15 @@ function restartGame() {
   clearTrail(scene);
 
   // Reset Qix
-  const qixInitialConfinement = {
-      minX: -gridLimit + 1, maxX: gridLimit - 1,
-      minY: -gridLimit + 1, maxY: gridLimit - 1
+  qixConfinementRect = { // Reset the main confinement rect
+    minX: -gridLimit,
+    maxX: gridLimit,
+    minY: -gridLimit,
+    maxY: gridLimit
   };
+  console.log("Qix confinement rectangle reset for new game.");
   if (qix) {
-    qix.reset(new THREE.Vector2(0, 0), qixInitialConfinement);
+    qix.reset(new THREE.Vector2(0, 0), qixConfinementRect); // Use the reset global rect
   }
 
   // Reset Sparx
@@ -471,16 +477,16 @@ function restartGame() {
   timeSinceLastPowerUpSpawn = 0.0;
 
   // Clear Captured Areas
-  capturedAreas.forEach(mesh => {
-    scene.remove(mesh);
-    mesh.geometry.dispose();
-    if (Array.isArray(mesh.material)) {
-       mesh.material.forEach(m => m.dispose());
+  capturedAreaDataList.forEach(data => {
+    scene.remove(data.mesh);
+    data.mesh.geometry.dispose();
+    if (Array.isArray(data.mesh.material)) {
+      data.mesh.material.forEach(m => m.dispose());
     } else {
-       (mesh.material as THREE.Material).dispose();
+      (data.mesh.material as THREE.Material).dispose();
     }
   });
-  capturedAreas = [];
+  capturedAreaDataList = [];
 
   // Reset game loop
   running = true;
@@ -489,6 +495,88 @@ function restartGame() {
   console.log("Game Reset Complete.");
 }
 // --- End Game Restart Function ---
+
+function updateQixConfinementOnCapture(capturedShape: THREE.Shape) {
+  if (!qix) return;
+
+  const points = capturedShape.getPoints();
+  if (points.length === 0) return;
+  const capturedBox = new THREE.Box2().setFromPoints(points);
+
+  const currentQixConf = qixConfinementRect;
+  let newMinX = currentQixConf.minX;
+  let newMaxX = currentQixConf.maxX;
+  let newMinY = currentQixConf.minY;
+  let newMaxY = currentQixConf.maxY;
+  let confinementChanged = false;
+  const epsilon = 0.1;
+
+  // Check for slice from LEFT
+  if (Math.abs(capturedBox.min.x - currentQixConf.minX) < epsilon &&
+      Math.abs(capturedBox.min.y - currentQixConf.minY) < epsilon &&
+      Math.abs(capturedBox.max.y - currentQixConf.maxY) < epsilon &&
+      capturedBox.max.x < currentQixConf.maxX - epsilon) {
+    newMinX = capturedBox.max.x;
+    confinementChanged = true;
+  }
+  // Check for slice from RIGHT
+  else if (Math.abs(capturedBox.max.x - currentQixConf.maxX) < epsilon &&
+      Math.abs(capturedBox.min.y - currentQixConf.minY) < epsilon &&
+      Math.abs(capturedBox.max.y - currentQixConf.maxY) < epsilon &&
+      capturedBox.min.x > currentQixConf.minX + epsilon) {
+    newMaxX = capturedBox.min.x;
+    confinementChanged = true;
+  }
+  // Check for slice from BOTTOM
+  else if (Math.abs(capturedBox.min.y - currentQixConf.minY) < epsilon &&
+      Math.abs(capturedBox.min.x - currentQixConf.minX) < epsilon &&
+      Math.abs(capturedBox.max.x - currentQixConf.maxX) < epsilon &&
+      capturedBox.max.y < currentQixConf.maxY - epsilon) {
+    newMinY = capturedBox.max.y;
+    confinementChanged = true;
+  }
+  // Check for slice from TOP
+  else if (Math.abs(capturedBox.max.y - currentQixConf.maxY) < epsilon &&
+      Math.abs(capturedBox.min.x - currentQixConf.minX) < epsilon &&
+      Math.abs(capturedBox.max.x - currentQixConf.maxX) < epsilon &&
+      capturedBox.min.y > currentQixConf.minY + epsilon) {
+    newMaxY = capturedBox.min.y;
+    confinementChanged = true;
+  }
+
+  if (confinementChanged) {
+    qixConfinementRect = { minX: newMinX, maxX: newMaxX, minY: newMinY, maxY: newMaxY };
+    console.log("Qix global confinement rect updated to:", qixConfinementRect);
+    qix.setConfinement(qixConfinementRect);
+
+    let qixPosAdjusted = false;
+    const qixLogicPos = qix.position;
+    const pushMargin = 0.2;
+
+    if (qixLogicPos.x < qixConfinementRect.minX) {
+        qixLogicPos.x = qixConfinementRect.minX + pushMargin; qixPosAdjusted = true;
+        if(qix.velocity.x < 0) qix.velocity.x *= -1;
+    }
+    if (qixLogicPos.x > qixConfinementRect.maxX) {
+        qixLogicPos.x = qixConfinementRect.maxX - pushMargin; qixPosAdjusted = true;
+        if(qix.velocity.x > 0) qix.velocity.x *= -1;
+    }
+    if (qixLogicPos.y < qixConfinementRect.minY) {
+        qixLogicPos.y = qixConfinementRect.minY + pushMargin; qixPosAdjusted = true;
+        if(qix.velocity.y < 0) qix.velocity.y *= -1;
+    }
+    if (qixLogicPos.y > qixConfinementRect.maxY) {
+        qixLogicPos.y = qixConfinementRect.maxY - pushMargin; qixPosAdjusted = true;
+        if(qix.velocity.y > 0) qix.velocity.y *= -1;
+    }
+
+    if (qixPosAdjusted) {
+      qix.mesh.position.set(qixLogicPos.x, qixLogicPos.y, 0);
+      qix.updateLineGeometry();
+      console.log("Qix position and velocity adjusted for new confinement:", qixLogicPos, qix.velocity);
+    }
+  }
+}
 
 function trySpawnPowerUp(dt: number) {
   timeSinceLastPowerUpSpawn += dt;
@@ -719,11 +807,12 @@ function animate() {
             console.log(`Selected polygon with area: ${actualFilledArea.toFixed(2)}`);
 
             const shape = new THREE.Shape(chosenPolygonVertices); // This is the 'shape' instance we need
+            updateQixConfinementOnCapture(shape); // Call the new function
             const geometry = new THREE.ShapeGeometry(shape);
             const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }); // Changed color for testing
             const capturedMesh = new THREE.Mesh(geometry, material);
             scene.add(capturedMesh);
-            capturedAreaDataList.push({ mesh: capturedMesh, shape: shape }); // Store mesh and shape
+            capturedAreaDataList.push({ mesh: capturedMesh, shape: shape }); // Ensure this line is correct
 
             playSound('areaCapture');
             // Deactivate Fuse if active upon successful capture
@@ -967,12 +1056,16 @@ window.onload = () => {
 
   // Initialize Qix Enemy
   console.log('Setting up Qix enemy...');
-  const qixSpawnPos = new THREE.Vector2(0, 0); // Or random within bounds
-  const qixConfinement = {
-      minX: -gridLimit + 1, maxX: gridLimit - 1,
-      minY: -gridLimit + 1, maxY: gridLimit - 1
+  qixConfinementRect = {
+    minX: -gridLimit,
+    maxX: gridLimit,
+    minY: -gridLimit,
+    maxY: gridLimit
   };
-  qix = new QixEnemy(qixSpawnPos, qixConfinement);
+  console.log("Initial Qix confinement rectangle set:", qixConfinementRect);
+  const qixSpawnPos = new THREE.Vector2(0, 0);
+  // QixEnemy now takes the overall confinement. Its internal logic might add margins if needed.
+  qix = new QixEnemy(qixSpawnPos, qixConfinementRect);
   scene.add(qix.mesh);
 
   // Initialize Sparx Enemies
