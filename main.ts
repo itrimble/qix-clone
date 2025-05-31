@@ -4,6 +4,7 @@ import { initTrail, updateTrail, clearTrail, getTrailPoints } from './game/trail
 import { createScene, updateScene, player } from './game/engine';
 import { QixEnemy } from './game/qix_enemy';
 import { SparxEnemy } from './game/sparx_enemy';
+import { PowerUp, PowerUpType, FreezeQixPowerUp, PlayerSpeedBoostPowerUp, GameTargets } from './game/powerup';
 
 // Global variables
 let scene: THREE.Scene;
@@ -20,6 +21,15 @@ const totalGameArea = (2 * gridLimit) * (2 * gridLimit); // Total area of the ga
 let capturedAreas: THREE.Mesh[] = []; // Stores meshes of captured areas
 let qix: QixEnemy;
 let sparxEnemies: SparxEnemy[] = [];
+let playerSpeedMultiplier = { value: 1.0 };
+let originalPlayerColor = new THREE.Color(0x00ff00); // Default green from engine.ts
+
+let powerUpsOnBoard: PowerUp[] = [];
+let activePowerUpEffects: PowerUp[] = [];
+const MAX_POWERUPS_ON_BOARD = 2;
+const POWERUP_SPAWN_INTERVAL = 15.0; // seconds
+let timeSinceLastPowerUpSpawn = 0.0;
+const POWERUP_SIZE = 0.7; // Should match size used in PowerUp subclasses for bounding box
 
 // --- Intersection Detection Utilities ---
 
@@ -283,6 +293,60 @@ const gameState = {
   level: 1
 };
 
+function trySpawnPowerUp(dt: number) {
+  timeSinceLastPowerUpSpawn += dt;
+
+  if (timeSinceLastPowerUpSpawn > POWERUP_SPAWN_INTERVAL && powerUpsOnBoard.length < MAX_POWERUPS_ON_BOARD) {
+    timeSinceLastPowerUpSpawn = 0; // Reset timer
+
+    let spawnPosition: THREE.Vector2 | null = null;
+    const spawnMargin = 2.0; // Don't spawn too close to edges
+    const maxAttempts = 10; // Attempts to find a valid spawn position
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const x = THREE.MathUtils.randFloat(-gridLimit + spawnMargin, gridLimit - spawnMargin);
+      const y = THREE.MathUtils.randFloat(-gridLimit + spawnMargin, gridLimit - spawnMargin);
+      const potentialPos = new THREE.Vector2(x, y);
+
+      // Check for overlap with existing captured areas (simplified check)
+      let overlapsCapturedArea = false;
+      const powerUpBox = new THREE.Box3(
+        new THREE.Vector3(x - POWERUP_SIZE / 2, y - POWERUP_SIZE / 2, -0.1),
+        new THREE.Vector3(x + POWERUP_SIZE / 2, y + POWERUP_SIZE / 2, 0.1)
+      );
+      for (const areaMesh of capturedAreas) { // capturedAreas is the array of THREE.Mesh for filled zones
+        const areaBox = new THREE.Box3().setFromObject(areaMesh);
+        if (powerUpBox.intersectsBox(areaBox)) {
+          overlapsCapturedArea = true;
+          break;
+        }
+      }
+
+      if (!overlapsCapturedArea) {
+        spawnPosition = potentialPos;
+        break;
+      }
+    }
+
+    if (spawnPosition) {
+      let newPowerUp: PowerUp;
+      const randomType = Math.random() < 0.5 ? PowerUpType.FREEZE_QIX : PowerUpType.PLAYER_SPEED_BOOST;
+
+      if (randomType === PowerUpType.FREEZE_QIX) {
+        newPowerUp = new FreezeQixPowerUp(spawnPosition, scene); // Pass scene if constructor needs it
+      } else {
+        newPowerUp = new PlayerSpeedBoostPowerUp(spawnPosition);
+      }
+
+      powerUpsOnBoard.push(newPowerUp);
+      scene.add(newPowerUp.mesh);
+      console.log(`Spawned ${newPowerUp.type} at (${spawnPosition.x.toFixed(2)}, ${spawnPosition.y.toFixed(2)})`);
+    } else {
+      console.log("Failed to find suitable spawn location for power-up after multiple attempts.");
+    }
+  }
+}
+
 // Main animation loop
 function animate() {
   if (!running) return;
@@ -294,7 +358,7 @@ function animate() {
   // lastTime is updated later, before rendering debug info.
   
   // Update game state
-  updateScene(scene);
+  updateScene(scene, playerSpeedMultiplier.value);
 
   // Update Qix Enemy
   if (qix) {
@@ -304,6 +368,44 @@ function animate() {
   // Update Sparx Enemies
   for (const sparx of sparxEnemies) {
     sparx.update(deltaTime);
+  }
+
+  // Try Spawning PowerUps
+  trySpawnPowerUp(deltaTime);
+
+  // Player-PowerUp Collection Check
+  const playerBoundingBox = new THREE.Box3().setFromObject(player); // player is the THREE.Mesh
+  for (let i = powerUpsOnBoard.length - 1; i >= 0; i--) {
+    const powerUp = powerUpsOnBoard[i];
+    if (!powerUp.mesh || !powerUp.isAvailableForCollection) continue;
+
+    const powerUpBoundingBox = new THREE.Box3().setFromObject(powerUp.mesh);
+    if (playerBoundingBox.intersectsBox(powerUpBoundingBox)) {
+      const gameTargets: GameTargets = {
+        playerMesh: player,
+        playerSpeedMultiplier: playerSpeedMultiplier,
+        qix: qix,
+        gameState: gameState,
+        scene: scene
+      };
+      powerUp.collect(scene, gameTargets);
+      activePowerUpEffects.push(powerUp);
+      powerUpsOnBoard.splice(i, 1); // Remove from on-board list
+      break; // Collect one per frame
+    }
+  }
+
+  // Update Active PowerUp Effects
+  for (let i = activePowerUpEffects.length - 1; i >= 0; i--) {
+    const powerUp = activePowerUpEffects[i];
+    const gameTargets: GameTargets = {
+       playerMesh: player, playerSpeedMultiplier: playerSpeedMultiplier, qix: qix, gameState: gameState, scene: scene
+    };
+    powerUp.update(deltaTime, gameTargets);
+
+    if (!powerUp.isEffectActive) { // Effect has expired and removeEffect was called
+      activePowerUpEffects.splice(i, 1); // Remove from active effects list
+    }
   }
 
   // Player-Sparx Collision Check (Player on Boundary)

@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { createStarfield, createNebulaGradient } from './backgrounds';
 import { keys } from '../ui/controls';
 
+const BASE_PLAYER_SPEED = 0.25;
+
 // Global variables
 export let player: THREE.Mesh;
 
@@ -69,9 +71,9 @@ export function createScene(canvas: HTMLCanvasElement) {
   return { scene, camera, renderer };
 }
 
-export function updateScene(scene: THREE.Scene) {
-  // Handle player movement - increased speed for better response
-  const speed = 0.25;
+export function updateScene(scene: THREE.Scene, speedMultiplier: number): void {
+  // Handle player movement
+  const currentSpeed = BASE_PLAYER_SPEED * speedMultiplier;
   
   // Verbose debugging when keys are pressed
   const activeKeys = Object.entries(keys).filter(([k, v]) => v).map(([k]) => k);
@@ -81,20 +83,20 @@ export function updateScene(scene: THREE.Scene) {
   
   // Move player based on keyboard input
   if (keys['arrowup'] || keys['ArrowUp'] || keys['w']) {
-    player.position.y += speed;
-    console.log('Moving UP', player.position.y);
+    player.position.y += currentSpeed;
+    // console.log('Moving UP', player.position.y); // Reduced verbosity
   }
   if (keys['arrowdown'] || keys['ArrowDown'] || keys['s']) {
-    player.position.y -= speed;
-    console.log('Moving DOWN', player.position.y);
+    player.position.y -= currentSpeed;
+    // console.log('Moving DOWN', player.position.y);
   }
   if (keys['arrowleft'] || keys['ArrowLeft'] || keys['a']) {
-    player.position.x -= speed;
-    console.log('Moving LEFT', player.position.x);
+    player.position.x -= currentSpeed;
+    // console.log('Moving LEFT', player.position.x);
   }
   if (keys['arrowright'] || keys['ArrowRight'] || keys['d']) {
-    player.position.x += speed;
-    console.log('Moving RIGHT', player.position.x);
+    player.position.x += currentSpeed;
+    // console.log('Moving RIGHT', player.position.x);
   }
   
   // Add a small rotation to the player for visual feedback

@@ -13,6 +13,7 @@ export class QixEnemy {
   private velocity: THREE.Vector2;
   private confinement: { minX: number, maxX: number, minY: number, maxY: number };
   private time: number = 0; // For animation
+  public isFrozen: boolean = false;
 
   constructor(initialPosition: THREE.Vector2, confinementRect: { minX: number, maxX: number, minY: number, maxY: number }) {
     this.position = initialPosition;
@@ -52,6 +53,9 @@ export class QixEnemy {
   }
 
   update(deltaTime: number): void {
+    if (this.isFrozen) {
+      return; // Completely skip update if frozen
+    }
     this.time += ANIMATION_SPEED * deltaTime * 50; // deltaTime can be small, scale it
 
     // Move position
