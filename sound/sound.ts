@@ -1,146 +1,167 @@
-const soundPaths: Record<string, string> = {
-  // Music Tracks - using same file for demo, ideally these are different
-  music_standard: "sound/music.mp3", 
-  music_tense: "sound/music.mp3", // Should be a different, tense track
-  music_boss: "sound/music.mp3", // Placeholder for boss music
+// sound/sound.ts
+const soundCache: Map<string, HTMLAudioElement> = new Map();
+let masterVolume: number = 1.0; // Default master volume
+let preferredMusicVolume: number = 0.3; // Default preferred volume for music
 
-  // Sound Effects
-  gameover: "sound/gameover.wav",
-  bomb: "sound/bomb.wav", // Example SFX
-  pickup: "sound/pickup.wav", // Example SFX
-  bonus: "sound/bonus.wav", // Example SFX
-  levelUp: "sound/bonus.wav", // Using bonus for levelUp for now
-  collision: "sound/bomb.wav", // Using bomb for collision for now
+// Define sound assets (logical names and paths)
+export const SOUND_ASSETS = {
+  drawStart: { name: "drawStart", path: "assets/sounds/sfx_draw_start.wav" },
+  areaCapture: { name: "areaCapture", path: "assets/sounds/sfx_area_capture.wav" },
+  playerDeath: { name: "playerDeath", path: "assets/sounds/sfx_player_death.wav" },
+  powerupCollect: { name: "powerupCollect", path: "assets/sounds/sfx_powerup_collect.wav" },
+  powerupActivate: { name: "powerupActivate", path: "assets/sounds/sfx_powerup_activate.wav" },
+  fuseActivate: { name: "fuseActivate", path: "assets/sounds/sfx_fuse_activate.wav" },
+  gameOver: { name: "gameOver", path: "assets/sounds/sfx_game_over.wav" },
+  buttonClick: { name: "buttonClick", path: "assets/sounds/sfx_button_click.wav" },
+  // Add more sounds here as needed
 };
 
-const sounds: Record<string, HTMLAudioElement> = {};
-let currentMusicTrackName: string | null = null;
-const DEFAULT_MUSIC_VOLUME = 0.3; // Default volume for music tracks
-
-export function loadSounds(): void {
-  console.log("Loading sounds...");
-  for (const key in soundPaths) {
-    const audio = new Audio(soundPaths[key]);
-    audio.preload = "auto";
-    sounds[key] = audio;
-    // Potential issue: Mobile browsers often restrict autoplay until user interaction
+export function preloadSound(soundNameKey: keyof typeof SOUND_ASSETS): Promise<void> {
+  const soundAsset = SOUND_ASSETS[soundNameKey];
+  if (!soundAsset) {
+    const errorMsg = `Sound asset key '${String(soundNameKey)}' not found in SOUND_ASSETS.`;
+    console.error(errorMsg);
+    return Promise.reject(new Error(errorMsg));
   }
-  console.log("Sounds loaded:", sounds);
-}
+  const { name: soundName, path: filePath } = soundAsset;
 
-export function playSound(name: string, volume: number = 0.7): void {
-  const sound = sounds[name];
-  if (sound) {
-    sound.currentTime = 0;
-    sound.volume = volume;
-    sound.play().catch((err) => console.warn(`Sound error (${name}):`, err));
-  } else {
-    console.warn(`Sound not found: ${name}`);
-  }
-}
-
-// --- Music Control ---
-let fadeInterval: number | undefined;
-
-function fadeVolume(audio: HTMLAudioElement, targetVolume: number, duration: number, onComplete?: () => void): void {
-  if (fadeInterval) {
-    clearInterval(fadeInterval); // Clear any existing fade for this audio element (or globally if simple)
-  }
-
-  const initialVolume = audio.volume;
-  const steps = 50; // Number of steps for the fade
-  const stepDuration = duration / steps;
-  const volumeChangePerStep = (targetVolume - initialVolume) / steps;
-  let currentStep = 0;
-
-  // Ensure audio is playing if fading in, or pause after fade out
-  if (targetVolume > 0 && audio.paused) {
-      audio.play().catch(e => console.warn("Error playing audio for fade-in:", e));
-  }
-
-  fadeInterval = window.setInterval(() => {
-    currentStep++;
-    const newVolume = initialVolume + volumeChangePerStep * currentStep;
-    
-    if ((volumeChangePerStep > 0 && newVolume >= targetVolume) || (volumeChangePerStep < 0 && newVolume <= targetVolume) || currentStep >= steps) {
-      audio.volume = targetVolume;
-      clearInterval(fadeInterval);
-      fadeInterval = undefined;
-      if (targetVolume === 0) {
-        audio.pause();
-        audio.currentTime = 0; // Reset for next play
+  return new Promise((resolve, reject) => {
+    if (soundCache.has(soundName)) {
+      const existingAudio = soundCache.get(soundName);
+      // Check readyState: 0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA
+      if (existingAudio && existingAudio.readyState >= 2) {
+        resolve(); // Already loaded sufficiently
+        return;
       }
-      if (onComplete) onComplete();
-    } else {
-      audio.volume = newVolume;
+      // If in cache but not loaded, could be a pending load; let it proceed or re-init.
+      // For simplicity, we'll remove and re-add if not ready.
     }
-  }, stepDuration);
+
+    const audio = new Audio();
+    audio.src = filePath;
+
+    const loadHandler = () => {
+      soundCache.set(soundName, audio);
+      resolve();
+      audio.removeEventListener('canplaythrough', loadHandler);
+      audio.removeEventListener('error', errorHandler);
+    };
+
+    const errorHandler = (e: Event | string) => {
+      console.error(`Error loading sound: ${soundName} from ${filePath}`, e);
+      soundCache.delete(soundName); // Remove from cache if load failed
+      const error = e instanceof Event ? new Error(`Audio load error for ${soundName}`) : new Error(String(e));
+      reject(error);
+      audio.removeEventListener('canplaythrough', loadHandler);
+      audio.removeEventListener('error', errorHandler);
+    };
+
+    audio.addEventListener('canplaythrough', loadHandler);
+    audio.addEventListener('error', errorHandler);
+
+    // Some browsers/situations might need load() called explicitly, especially if src is set after Audio() constructor.
+    // It's generally safe to call it.
+    audio.load();
+  });
 }
 
-export function switchToMusic(newTrackName: string, loop: boolean = true, fadeDuration: number = 1000, volume: number = DEFAULT_MUSIC_VOLUME): void {
-  if (currentMusicTrackName === newTrackName && sounds[newTrackName] && !sounds[newTrackName].paused) {
-    console.log(`Music track ${newTrackName} is already playing.`);
-    // Ensure its volume is correct if it was fading out
-    sounds[newTrackName].volume = volume; 
+export function playSound(soundNameKey: keyof typeof SOUND_ASSETS, volumeScale: number = 1.0): void {
+  const soundAsset = SOUND_ASSETS[soundNameKey];
+  if (!soundAsset) {
+    console.warn(`Sound asset key '${String(soundNameKey)}' not found for playing.`);
+    return;
+  }
+  const soundName = soundAsset.name;
+  const audio = soundCache.get(soundName);
+
+  if (!audio) {
+    console.warn(`Sound not found in cache: ${soundName}. Was it preloaded? Attempting to load and play.`);
+    // Attempt to load and play on the fly (not recommended for critical sounds due to delay)
+    preloadSound(soundNameKey).then(() => {
+        const loadedAudio = soundCache.get(soundName);
+        if (loadedAudio) {
+            loadedAudio.volume = Math.max(0, Math.min(1, masterVolume * volumeScale));
+            loadedAudio.currentTime = 0;
+            loadedAudio.play().catch(error => console.warn(`Error playing sound ${soundName} (after dynamic load):`, error));
+        }
+    }).catch(err => console.error(`Failed to dynamically load ${soundName} for playing:`, err));
     return;
   }
 
-  const newMusic = sounds[newTrackName];
-  if (!newMusic) {
-    console.warn(`Music track ${newTrackName} not found.`);
-    return;
+  // Ensure audio is ready to play, otherwise it might throw an error or do nothing.
+  // readyState >= 2 (HAVE_CURRENT_DATA) is usually enough for play to start,
+  // but HAVE_ENOUGH_DATA (4) is safer for playing without interruption.
+  // For SFX, we want to play immediately if possible.
+  if (audio.readyState < 2 && !audio.error) {
+      console.warn(`Sound ${soundName} not ready (readyState: ${audio.readyState}). Play may fail or be delayed.`);
+      // Optionally, you could queue it or wait for 'canplaythrough' again, but for SFX, try to play.
   }
 
-  // Fade out current music if any is playing
-  if (currentMusicTrackName && sounds[currentMusicTrackName] && !sounds[currentMusicTrackName].paused) {
-    const oldMusic = sounds[currentMusicTrackName];
-    console.log(`Fading out ${currentMusicTrackName}`);
-    fadeVolume(oldMusic, 0, fadeDuration / 2, () => {
-      console.log(`${oldMusic} faded out.`);
-    });
-  }
-
-  // Prepare and play new music
-  console.log(`Switching to music: ${newTrackName}`);
-  currentMusicTrackName = newTrackName;
-  newMusic.loop = loop;
-  newMusic.volume = 0; // Start silent
-  
-  // Start playing and then fade in
-  newMusic.play().then(() => {
-    console.log(`Fading in ${newTrackName}`);
-    fadeVolume(newMusic, volume, fadeDuration / 2);
-  }).catch(err => console.warn(`Error playing new music ${newTrackName}:`, err));
+  audio.volume = Math.max(0, Math.min(1, masterVolume * volumeScale));
+  audio.currentTime = 0; // Rewind to start to allow re-triggering
+  audio.play().catch(error => {
+    // Common issue: User hasn't interacted with the page yet.
+    console.warn(`Error playing sound ${soundName} (readyState: ${audio.readyState}):`, error);
+  });
 }
 
-export function stopCurrentMusic(fadeDuration: number = 1000): void {
-  if (currentMusicTrackName && sounds[currentMusicTrackName]) {
-    console.log(`Stopping music: ${currentMusicTrackName}`);
-    fadeVolume(sounds[currentMusicTrackName], 0, fadeDuration, () => {
-      currentMusicTrackName = null; // Clear current track name after fade out
-    });
-  }
+export function preloadAllGameSounds(): Promise<(void | PromiseSettledResult<void>)[]> {
+  const soundPromises: Promise<void>[] = [];
+  (Object.keys(SOUND_ASSETS) as Array<keyof typeof SOUND_ASSETS>).forEach(key => {
+      soundPromises.push(preloadSound(key));
+  });
+  // Use Promise.allSettled to ensure all preloads are attempted even if some fail.
+  return Promise.allSettled(soundPromises);
 }
 
-// Convenience functions for specific tracks
-export function playStandardMusic(): void {
-  console.log("Attempting to play standard music.");
-  switchToMusic('music_standard');
+// Basic Master Volume Control (Optional for now, can be expanded)
+export function setMasterVolume(volume: number): void {
+    masterVolume = Math.max(0, Math.min(1, volume));
+    console.log(`Master volume set to: ${masterVolume}`);
+    // Also update music volume if music is playing
+    if (backgroundMusic) {
+      backgroundMusic.volume = Math.max(0, Math.min(1, masterVolume * preferredMusicVolume));
+    }
 }
 
-export function playTenseMusic(): void {
-  console.log("Attempting to play tense music.");
-  switchToMusic('music_tense');
+export function getMasterVolume(): number {
+    return masterVolume;
 }
 
-export function playBossMusic(): void { // Placeholder
-  console.log("Attempting to play boss music.");
-  switchToMusic('music_boss');
+// Music functions (stubs for now, to be implemented in Step 5)
+let backgroundMusic: HTMLAudioElement | null = null;
+
+export function loadAndPlayMusic(filePath: string, loop: boolean = true, volume: number = 0.3): void {
+    if (backgroundMusic && !backgroundMusic.paused) { // If music is already playing, don't just restart unless src is different
+      if (backgroundMusic.src.endsWith(filePath)) {
+         console.log("Background music already playing the requested track.");
+         setMusicVolume(volume); // Just adjust volume if needed
+         return;
+      }
+      stopMusic();
+    }
+    preferredMusicVolume = Math.max(0, Math.min(1, volume)); // Store preferred volume
+    backgroundMusic = new Audio(filePath);
+    backgroundMusic.loop = loop;
+    // Apply combined master and preferred music volume
+    backgroundMusic.volume = Math.max(0, Math.min(1, masterVolume * preferredMusicVolume));
+    backgroundMusic.play().then(() => {
+      console.log("Background music started:", filePath);
+    }).catch(error => console.error("Error playing background music:", error));
 }
 
-// Keep the old playMusic for backward compatibility or simple cases if needed, but mark as deprecated
-/** @deprecated Use switchToMusic or specific music functions like playStandardMusic */
-export function playMusic(): void {
-  console.warn("Deprecated playMusic() called. Use switchToMusic() or playStandardMusic() instead.");
-  playStandardMusic(); // Default to standard music
+export function stopMusic(): void {
+    if (backgroundMusic) {
+        backgroundMusic.pause();
+        backgroundMusic.currentTime = 0; // Rewind
+        console.log("Background music stopped.");
+    }
+}
+
+export function setMusicVolume(volume: number): void {
+    preferredMusicVolume = Math.max(0, Math.min(1, volume));
+    if (backgroundMusic) {
+        backgroundMusic.volume = Math.max(0, Math.min(1, masterVolume * preferredMusicVolume));
+    }
+    console.log(`Preferred music volume set to: ${preferredMusicVolume}`);
 }
