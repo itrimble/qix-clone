@@ -2,6 +2,15 @@ import * as THREE from 'three';
 import { initControls, keys } from './ui/controls';
 import { initTrail, updateTrail, clearTrail, getTrailPoints } from './game/trail';
 import { createScene, updateScene, player } from './game/engine';
+import {
+    getOrientation,
+    onSegment,
+    segmentsIntersect,
+    createOrderedCorners,
+    getSegmentForPoint,
+    getBoundaryPath,
+    calculateQixPolygons
+} from './game/geometryUtils';
 import { QixEnemy } from './game/qix_enemy';
 import { SparxEnemy } from './game/sparx_enemy';
 import { PowerUp, PowerUpType, FreezeQixPowerUp, PlayerSpeedBoostPowerUp, GameTargets } from './game/powerup';
@@ -32,7 +41,7 @@ let capturedAreaDataList: CapturedAreaData[] = []; // Changed from capturedAreas
 let qix: QixEnemy;
 let sparxEnemies: SparxEnemy[] = [];
 let playerSpeedMultiplier = { value: 1.0 };
-let originalPlayerColor = new THREE.Color(0x00ff00); // Default green from engine.ts
+// let originalPlayerColor = new THREE.Color(0x00ff00); // Default green from engine.ts - this seems unused now
 
 // PowerUp Management
 let powerUpsOnBoard: PowerUp[] = [];
@@ -58,163 +67,6 @@ let fuseActiveOnTrail: boolean = false;
 
 // Qix Confinement
 let qixConfinementRect: { minX: number, maxX: number, minY: number, maxY: number };
-
-// --- Intersection Detection Utilities ---
-
-// Helper function to find orientation of ordered triplet (p, q, r).
-// Returns 0 if p, q, r are collinear, 1 if clockwise, 2 if counterclockwise.
-function getOrientation(p: THREE.Vector2, q: THREE.Vector2, r: THREE.Vector2): number {
-  const val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
-  if (val === 0) return 0; // Collinear
-  return (val > 0) ? 1 : 2; // Clockwise or Counterclockwise
-}
-
-// Helper function to check if point q lies on segment pr.
-function onSegment(p: THREE.Vector2, q: THREE.Vector2, r: THREE.Vector2): boolean {
-  return (q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) &&
-          q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y));
-}
-
-function segmentsIntersect(p1: THREE.Vector2, q1: THREE.Vector2, p2: THREE.Vector2, q2: THREE.Vector2): boolean {
-  const o1 = getOrientation(p1, q1, p2);
-  const o2 = getOrientation(p1, q1, q2);
-  const o3 = getOrientation(p2, q2, p1);
-  const o4 = getOrientation(p2, q2, q1);
-
-  // General case: segments cross each other
-  if (o1 !== 0 && o2 !== 0 && o3 !== 0 && o4 !== 0) {
-     // Check if orientations are different for actual intersection (not just extensions)
-     if (o1 !== o2 && o3 !== o4) {
-         // Additional check to prevent intersection if endpoints are merely touching,
-         // but allow if they cross *through* an endpoint.
-         // This basic version might still report true if an endpoint of one segment
-         // lies *on* the other segment. True Qix usually penalizes this.
-         // For simplicity, we'll use this standard check.
-         // A more robust check would ensure endpoints are not identical.
-         if (p1.equals(p2) || p1.equals(q2) || q1.equals(p2) || q1.equals(q2)) {
-             return false; // Segments share an endpoint, not a crossing for Qix
-         }
-         return true;
-     }
-  }
-
-  // Special Cases for collinearity:
-  // Check if segments are collinear and overlap.
-  // o1, o2, o3, o4 are orientations. If any three points are collinear, one of these will be 0.
-
-  if (o1 === 0 && onSegment(p1, p2, q1)) return true; // p1, q1, p2 are collinear and p2 lies on segment p1q1
-  if (o2 === 0 && onSegment(p1, q2, q1)) return true; // p1, q1, q2 are collinear and q2 lies on segment p1q1
-  if (o3 === 0 && onSegment(p2, p1, q2)) return true; // p2, q2, p1 are collinear and p1 lies on segment p2q2
-  if (o4 === 0 && onSegment(p2, q1, q2)) return true; // p2, q2, q1 are collinear and q1 lies on segment p2q2
-
-  return false; // Doesn't fall in any of the above cases
-}
-
-// --- End Intersection Detection Utilities ---
-
-// --- Qix Polygon Calculation Utilities ---
-const blCorner = new THREE.Vector2(-gridLimit, -gridLimit);
-const brCorner = new THREE.Vector2(gridLimit, -gridLimit);
-const trCorner = new THREE.Vector2(gridLimit, gridLimit);
-const tlCorner = new THREE.Vector2(-gridLimit, gridLimit);
-const orderedCorners = [blCorner, brCorner, trCorner, tlCorner]; // Clockwise order
-
-function getSegmentForPoint(point: THREE.Vector2, gl: number): number {
-  if (point.y === -gl && point.x > -gl && point.x < gl) return 0; // Bottom (exclusive of corners)
-  if (point.x === gl && point.y > -gl && point.y < gl) return 1;  // Right (exclusive of corners)
-  if (point.y === gl && point.x < gl && point.x > -gl) return 2;   // Top (exclusive of corners)
-  if (point.x === -gl && point.y < gl && point.y > -gl) return 3; // Left (exclusive of corners)
-
-  // Handle corners: assign to the segment they start in CW order
-  if (point.equals(blCorner)) return 0; // Belongs to bottom segment start
-  if (point.equals(brCorner)) return 1; // Belongs to right segment start
-  if (point.equals(trCorner)) return 2; // Belongs to top segment start
-  if (point.equals(tlCorner)) return 3; // Belongs to left segment start
-  console.warn(`Point ${point.x},${point.y} is not on boundary or corner.`);
-  return -1; // Should not happen if point is on boundary
-}
-
-function getBoundaryPath(p1: THREE.Vector2, p2: THREE.Vector2, isClockwise: boolean, gl: number): THREE.Vector2[] {
-  const path: THREE.Vector2[] = [p1.clone()]; // Start with a clone of p1
-  let currentSeg = getSegmentForPoint(p1, gl);
-  const targetSeg = getSegmentForPoint(p2, gl);
-
-  if (p1.equals(p2)) return [p1.clone()]; // Path of zero length if points are same
-
-  // Check if p1 or p2 are not on a segment (e.g. error in input or getSegmentForPoint)
-  if (currentSeg === -1) {
-    console.error("getBoundaryPath: p1 is not on a valid segment", p1);
-    return [p1.clone()]; // Return p1 to avoid further errors
-  }
-   if (targetSeg === -1) {
-    console.error("getBoundaryPath: p2 is not on a valid segment", p2);
-    // Depending on desired robustness, could return path with p1, or p1 and p2.
-    // For now, just add p2 and hope for the best or let downstream handle it.
-    path.push(p2.clone());
-    return path;
-  }
-
-  for (let i = 0; i < 8; i++) { // Max 4 segments + some buffer for complex cases/loops
-    if (currentSeg === targetSeg) {
-        // If p1 and p2 are on the same segment.
-        // If clockwise, p1 must be "before" p2 or at the same spot.
-        // If counter-clockwise, p1 must be "after" p2 or at the same spot.
-        // This simplified version assumes this condition is met or points are distinct enough.
-        // No intermediate corners are needed if they are on the same segment and path direction is valid.
-        break;
-    }
-
-    let cornerToAdd: THREE.Vector2;
-    if (isClockwise) {
-      cornerToAdd = orderedCorners[(currentSeg + 1) % 4];
-      currentSeg = (currentSeg + 1) % 4;
-    } else { // Counter-clockwise
-      cornerToAdd = orderedCorners[currentSeg];
-      currentSeg = (currentSeg + 3) % 4; // Move to previous segment (wraps around)
-    }
-    path.push(cornerToAdd.clone());
-    if (cornerToAdd.equals(p2)) break;
-    if (path.length > 6) { // Safety break for unexpected loops
-        console.error("getBoundaryPath exceeded max iterations, something is wrong.", p1, p2, isClockwise);
-        break;
-    }
-  }
-
-  if (!path[path.length-1].equals(p2)) {
-    path.push(p2.clone());
-  }
-  return path;
-}
-
-function calculateQixPolygons(playerTrail: THREE.Vector2[], gl: number): { polygon1: THREE.Vector2[], polygon2: THREE.Vector2[] } {
-  if (playerTrail.length < 2) {
-    console.warn("calculateQixPolygons: Player trail too short.");
-    return { polygon1: [], polygon2: [] }; // Not enough points
-  }
-  const startTrailNode = playerTrail[0];
-  const endTrailNode = playerTrail[playerTrail.length - 1];
-
-  // Path along boundary, clockwise from end to start
-  const boundaryPathCW = getBoundaryPath(endTrailNode, startTrailNode, true, gl);
-  // Path along boundary, counter-clockwise from end to start
-  const boundaryPathCCW = getBoundaryPath(endTrailNode, startTrailNode, false, gl);
-
-  // Polygon 1: Player's trail + clockwise path along boundary
-  const polygon1Vertices = [...playerTrail.map(p=>p.clone()), ...boundaryPathCW.slice(1)];
-
-  // Polygon 2: Player's trail + counter-clockwise path along boundary
-  const polygon2Vertices = [...playerTrail.map(p=>p.clone()), ...boundaryPathCCW.slice(1)];
-
-  if (polygon1Vertices.length > 1 && polygon1Vertices[polygon1Vertices.length - 1].equals(polygon1Vertices[0])) {
-     polygon1Vertices.pop();
-  }
-  if (polygon2Vertices.length > 1 && polygon2Vertices[polygon2Vertices.length - 1].equals(polygon2Vertices[0])) {
-     polygon2Vertices.pop();
-  }
-
-  return { polygon1: polygon1Vertices, polygon2: polygon2Vertices };
-}
-// --- End Qix Polygon Calculation Utilities ---
 
 // Debug info display
 function createDebugInfo() {
@@ -429,13 +281,13 @@ function restartGame() {
   updateHUD(); // Update HUD immediately
 
   // Reset player
-  player.position.set(-gridLimit, -gridLimit, 0);
+  player.position.set(-gridLimit, -gridLimit, 0); // Uses global gridLimit
   playerSpeedMultiplier.value = 1.0;
   if (player.material instanceof THREE.MeshPhongMaterial) {
        (player.material as THREE.MeshPhongMaterial).color.setHex(0x00ff00); // Default green
   }
 
-  clearTrail(scene);
+  clearTrail(scene); // Trail functions are imported
 
   // Reset Qix
   qixConfinementRect = { // Reset the main confinement rect
@@ -452,13 +304,14 @@ function restartGame() {
   // Reset Sparx
   sparxEnemies.forEach(s => scene.remove(s.mesh));
   sparxEnemies = [];
-  const sparx1StartPos = blCorner.clone();
-  const sparx1 = new SparxEnemy(0, sparx1StartPos, 1, gridLimit, orderedCorners);
+  const currentOrderedCorners = createOrderedCorners(gridLimit); // Use function
+  const sparx1StartPos = currentOrderedCorners[0].clone(); // blCorner
+  const sparx1 = new SparxEnemy(0, sparx1StartPos, 1, gridLimit, currentOrderedCorners);
   sparxEnemies.push(sparx1);
   scene.add(sparx1.mesh);
 
-  const sparx2StartPos = trCorner.clone();
-  const sparx2 = new SparxEnemy(2, sparx2StartPos, -1, gridLimit, orderedCorners);
+  const sparx2StartPos = currentOrderedCorners[2].clone(); // trCorner
+  const sparx2 = new SparxEnemy(2, sparx2StartPos, -1, gridLimit, currentOrderedCorners);
   sparxEnemies.push(sparx2);
   scene.add(sparx2.mesh);
   console.log("Sparx re-initialized.");
@@ -1070,14 +923,14 @@ window.onload = () => {
 
   // Initialize Sparx Enemies
   console.log('Setting up Sparx enemies...');
-  // Ensure 'orderedCorners' is defined and accessible here. It is defined at module scope.
-  const sparx1StartPos = blCorner.clone(); // Start at Bottom-Left
-  const sparx1 = new SparxEnemy(0, sparx1StartPos, 1, gridLimit, orderedCorners); // Seg 0 (Bottom), Dir 1 (Right)
+  const currentOrderedCorners = createOrderedCorners(gridLimit); // Use function
+  const sparx1StartPos = currentOrderedCorners[0].clone(); // blCorner
+  const sparx1 = new SparxEnemy(0, sparx1StartPos, 1, gridLimit, currentOrderedCorners);
   sparxEnemies.push(sparx1);
   scene.add(sparx1.mesh);
 
-  const sparx2StartPos = trCorner.clone(); // Start at Top-Right
-  const sparx2 = new SparxEnemy(2, sparx2StartPos, -1, gridLimit, orderedCorners); // Seg 2 (Top), Dir -1 (Left)
+  const sparx2StartPos = currentOrderedCorners[2].clone(); // trCorner
+  const sparx2 = new SparxEnemy(2, sparx2StartPos, -1, gridLimit, currentOrderedCorners);
   sparxEnemies.push(sparx2);
   scene.add(sparx2.mesh);
   
