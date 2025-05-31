@@ -45,6 +45,11 @@ let highScoreDisplayEl: HTMLElement | null;
 let maxAreaDisplayEl: HTMLElement | null;
 // Note: 'canvas' is already our reference to the game canvas element
 
+// Fuse Mechanic Variables
+let timeTrailOpen: number = 0.0;
+const FUSE_ACTIVATION_DELAY_SECONDS: number = 3.0;
+let fuseActiveOnTrail: boolean = false;
+
 // --- Intersection Detection Utilities ---
 
 // Helper function to find orientation of ordered triplet (p, q, r).
@@ -635,6 +640,8 @@ function animate() {
     const onBoundary = Math.abs(player.position.x) >= gridLimit || Math.abs(player.position.y) >= gridLimit;
     if (onBoundary) {
       isDrawing = true;
+      timeTrailOpen = 0.0; // Reset fuse timer
+      fuseActiveOnTrail = false; // Reset fuse active flag for this trail
       clearTrail(scene); // Clear any previous partial trail
       initTrail(scene);  // Start a new trail
       console.log('Drawing started from boundary.');
@@ -646,6 +653,7 @@ function animate() {
   // Check for spacebar release to stop drawing
   if (!keys[' '] && spacebarWasPressed && isDrawing) { // Spacebar was released while drawing
     isDrawing = false;
+    fuseActiveOnTrail = false; // Reset fuse active flag
     const onBoundary = Math.abs(player.position.x) >= gridLimit || Math.abs(player.position.y) >= gridLimit;
     if (onBoundary) {
       // --- Start of Capture Logic ---
@@ -728,6 +736,26 @@ function animate() {
   if (isDrawing) {
     updateTrail(scene, player.position);
 
+    // Increment trail open timer and check for Fuse activation
+    timeTrailOpen += deltaTime;
+    if (!fuseActiveOnTrail && timeTrailOpen > FUSE_ACTIVATION_DELAY_SECONDS) {
+      // let fuseActivatedThisFrame = false; // Not strictly needed if only one fuse per trail
+      for (const sparx of sparxEnemies) {
+        if (!sparx.isFuse) {
+          const playerTrailVec3 = getTrailPoints();
+          if (playerTrailVec3.length > 0) {
+            const playerTrailVec2 = playerTrailVec3.map(p => new THREE.Vector2(p.x, p.y));
+            sparx.activateFuseMode(playerTrailVec2);
+            fuseActiveOnTrail = true;
+            // fuseActivatedThisFrame = true;
+            console.log("Fuse mechanic activated on a Sparx.");
+            break;
+          }
+        }
+      }
+      // if (fuseActivatedThisFrame) { timeTrailOpen = 0; } // Optional: reset for multiple fuses on same trail
+    }
+
     // --- Player-Qix Collision Check ---
     if (qix) { // Ensure qix exists
       const playerTrailVec3_qixCheck = getTrailPoints();
@@ -745,6 +773,7 @@ function animate() {
               console.log("Player trail hit Qix!");
               gameState.lives--;
               isDrawing = false;
+              fuseActiveOnTrail = false; // Reset fuse active flag
               clearTrail(scene);
 
               if (gameState.lives > 0) {
@@ -767,8 +796,42 @@ function animate() {
     }
     // --- End Player-Qix Collision Check ---
 
+    // --- Fuse-Player Collision Check (Player's Head vs Fused Sparx) ---
+    // This must be checked while isDrawing is still true from this frame's perspective
+    if (running) { // Check 'running' again, as Qix collision might have set it to false
+      for (const sparx of sparxEnemies) {
+        if (sparx.isFuse) {
+          const PLAYER_SIZE = 2.0;
+          const SPARX_SIZE = 0.5;
+          const FUSE_COLLISION_THRESHOLD = (PLAYER_SIZE / 2) + (SPARX_SIZE / 2);
+
+          const distance = player.position.distanceTo(sparx.mesh.position);
+
+          if (distance < FUSE_COLLISION_THRESHOLD) {
+            console.log("Player caught by Fuse!");
+            gameState.lives--;
+            isDrawing = false;
+            fuseActiveOnTrail = false;
+            clearTrail(scene);
+            sparx.deactivateFuseMode();
+
+            if (gameState.lives > 0) {
+              player.position.set(-gridLimit, -gridLimit, 0);
+              console.log(`Player repositioned after Fuse collision. Lives: ${gameState.lives}`);
+            } else {
+              console.log("GAME OVER - Caught by Fuse!");
+              running = false;
+              showGameOverScreen();
+            }
+            break;
+          }
+        }
+      }
+    }
+    // --- End Fuse-Player Collision Check ---
+
     // --- Self-Intersection Check ---
-    // This check will only run if isDrawing is still true (i.e., no Qix collision occurred)
+    // This check will only run if isDrawing is still true (i.e., no Qix or Fuse collision occurred)
     const trailForCheck = getTrailPoints(); // Get fresh points (Vector3)
 
     if (trailForCheck.length >= 4) { // Need at least 4 points for a possible self-intersection of non-adjacent segments
@@ -786,6 +849,7 @@ function animate() {
           console.log("Trail crossed itself!");
           gameState.lives--;
           isDrawing = false; // Stop drawing
+          fuseActiveOnTrail = false; // Reset fuse active flag
           clearTrail(scene);  // Clear the offending trail
           // updateHUD(); // updateHUD is called every frame anyway, but if not, call here
 
