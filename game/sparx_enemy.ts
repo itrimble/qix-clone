@@ -88,4 +88,12 @@ export class SparxEnemy {
     }
     this.mesh.position.set(this.position.x, this.position.y, 0);
   }
+
+  public reset(initialSegment: number, initialPosition: THREE.Vector2, initialDirection: number): void {
+    this.currentSegment = initialSegment;
+    this.position.copy(initialPosition);
+    this.direction = initialDirection;
+    this.mesh.position.set(this.position.x, this.position.y, 0);
+    console.log("Sparx Reset to segment:", initialSegment);
+  }
 }

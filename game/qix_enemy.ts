@@ -89,4 +89,17 @@ export class QixEnemy {
      }
      return segments;
   }
+
+  public reset(initialPosition: THREE.Vector2, confinementRect: { minX: number, maxX: number, minY: number, maxY: number }): void {
+    this.position.copy(initialPosition);
+    this.confinement = confinementRect; // In case it changes, though unlikely for now
+
+    const angle = Math.random() * Math.PI * 2;
+    this.velocity.set(Math.cos(angle) * QIX_SPEED, Math.sin(angle) * QIX_SPEED); // QIX_SPEED is a const in this file
+
+    this.isFrozen = false;
+    this.time = 0; // Reset animation time
+    this.updateLineGeometry();
+    console.log("Qix Reset.");
+  }
 }

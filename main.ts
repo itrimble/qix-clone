@@ -24,12 +24,20 @@ let sparxEnemies: SparxEnemy[] = [];
 let playerSpeedMultiplier = { value: 1.0 };
 let originalPlayerColor = new THREE.Color(0x00ff00); // Default green from engine.ts
 
+// PowerUp Management
 let powerUpsOnBoard: PowerUp[] = [];
 let activePowerUpEffects: PowerUp[] = [];
 const MAX_POWERUPS_ON_BOARD = 2;
 const POWERUP_SPAWN_INTERVAL = 15.0; // seconds
 let timeSinceLastPowerUpSpawn = 0.0;
 const POWERUP_SIZE = 0.7; // Should match size used in PowerUp subclasses for bounding box
+
+// DOM Element References for Game Over Screen
+let gameOverOverlay: HTMLElement | null;
+let finalScoreEl: HTMLElement | null;
+let finalAreaEl: HTMLElement | null;
+let restartButton: HTMLElement | null;
+// Note: 'canvas' is already our reference to the game canvas element
 
 // --- Intersection Detection Utilities ---
 
@@ -293,6 +301,107 @@ const gameState = {
   level: 1
 };
 
+// --- Game Over Screen Functions ---
+function showGameOverScreen() {
+  if (gameOverOverlay && finalScoreEl && finalAreaEl && canvas ) {
+    finalScoreEl.textContent = gameState.score.toString();
+    finalAreaEl.textContent = gameState.captured.toFixed(1); // Format to 1 decimal place
+
+    gameOverOverlay.classList.remove('hidden');
+    canvas.classList.add('game-canvas-paused'); // Apply blur/dim effect
+
+    console.log("Game Over Screen Shown");
+  } else {
+    console.error("Game Over screen DOM elements not found!");
+  }
+}
+
+function hideGameOverScreen() {
+  if (gameOverOverlay && canvas) {
+    gameOverOverlay.classList.add('hidden');
+    canvas.classList.remove('game-canvas-paused'); // Remove blur/dim effect
+    console.log("Game Over Screen Hidden");
+  }
+}
+// --- End Game Over Screen Functions ---
+
+// --- Game Restart Function ---
+function restartGame() {
+  console.log("Restarting game...");
+  hideGameOverScreen();
+
+  // Reset game state
+  gameState.lives = 3;
+  gameState.score = 0;
+  gameState.captured = 0;
+  // gameState.level = 1; // If levels were a thing
+  updateHUD(); // Update HUD immediately
+
+  // Reset player
+  player.position.set(-gridLimit, -gridLimit, 0);
+  playerSpeedMultiplier.value = 1.0;
+  if (player.material instanceof THREE.MeshPhongMaterial) {
+       (player.material as THREE.MeshPhongMaterial).color.setHex(0x00ff00); // Default green
+  }
+
+  clearTrail(scene);
+
+  // Reset Qix
+  const qixInitialConfinement = {
+      minX: -gridLimit + 1, maxX: gridLimit - 1,
+      minY: -gridLimit + 1, maxY: gridLimit - 1
+  };
+  if (qix) {
+    qix.reset(new THREE.Vector2(0, 0), qixInitialConfinement);
+  }
+
+  // Reset Sparx
+  sparxEnemies.forEach(s => scene.remove(s.mesh));
+  sparxEnemies = [];
+  const sparx1StartPos = blCorner.clone();
+  const sparx1 = new SparxEnemy(0, sparx1StartPos, 1, gridLimit, orderedCorners);
+  sparxEnemies.push(sparx1);
+  scene.add(sparx1.mesh);
+
+  const sparx2StartPos = trCorner.clone();
+  const sparx2 = new SparxEnemy(2, sparx2StartPos, -1, gridLimit, orderedCorners);
+  sparxEnemies.push(sparx2);
+  scene.add(sparx2.mesh);
+  console.log("Sparx re-initialized.");
+
+  // Clear Power-Ups
+  const gameTargetsForReset: GameTargets = {
+      playerMesh: player, playerSpeedMultiplier: playerSpeedMultiplier, qix: qix, gameState: gameState, scene: scene
+  };
+  activePowerUpEffects.forEach(p => {
+      if (p.isEffectActive) p.removeEffect(gameTargetsForReset);
+  });
+  activePowerUpEffects = [];
+
+  powerUpsOnBoard.forEach(p => p.destroy(scene));
+  powerUpsOnBoard = [];
+  timeSinceLastPowerUpSpawn = 0.0;
+
+  // Clear Captured Areas
+  capturedAreas.forEach(mesh => {
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    if (Array.isArray(mesh.material)) {
+       mesh.material.forEach(m => m.dispose());
+    } else {
+       (mesh.material as THREE.Material).dispose();
+    }
+  });
+  capturedAreas = [];
+
+  // Reset game loop
+  running = true;
+  lastTime = performance.now();
+
+  console.log("Game Reset Complete.");
+}
+// --- End Game Restart Function ---
+
 function trySpawnPowerUp(dt: number) {
   timeSinceLastPowerUpSpawn += dt;
 
@@ -434,6 +543,7 @@ function animate() {
           } else { // gameState.lives <= 0
             console.log("GAME OVER - Hit by Sparx!");
             running = false;
+            showGameOverScreen();
           }
           // isDrawing is already false.
           // No trail to clear as player wasn't drawing.
@@ -567,6 +677,7 @@ function animate() {
               } else { // gameState.lives <= 0
                 console.log("GAME OVER - Hit Qix!");
                 running = false;
+                showGameOverScreen();
               }
               collisionWithQixDetected = true;
               break; // Break from inner qixSeg loop
@@ -602,10 +713,13 @@ function animate() {
           clearTrail(scene);  // Clear the offending trail
           // updateHUD(); // updateHUD is called every frame anyway, but if not, call here
 
-          if (gameState.lives <= 0) {
-            console.log("GAME OVER - No lives left.");
+          if (gameState.lives <= 0) { // This else block is for trail self-intersection
+            console.log("GAME OVER - No lives left (self-intersection).");
             running = false; // Stop the game loop
-            // You might want to show a game over screen here in a more complete game
+            showGameOverScreen();
+          } else { // Player lost a life due to self-intersection but game not over
+             player.position.set(-gridLimit, -gridLimit, 0); // Reposition to bottom-left corner
+             console.log(`Player repositioned after self-intersection. Lives: ${gameState.lives}`);
           }
           break; // Exit loop once an intersection is found
         }
@@ -716,6 +830,23 @@ window.onload = () => {
   
   // Expose game state globally for debugging
   (window as any).gameState = gameState;
+
+  // Assign Game Over Screen DOM elements
+  gameOverOverlay = document.getElementById('game-over-overlay');
+  finalScoreEl = document.getElementById('final-score');
+  finalAreaEl = document.getElementById('final-area');
+  restartButton = document.getElementById('restart-button');
+  // 'canvas' is already assigned earlier in window.onload
+
+  // Add event listener for restart button
+  if (restartButton) {
+    restartButton.addEventListener('click', restartGame);
+  } else {
+    console.error("Restart button not found!");
+  }
+
+  // Ensure Game Over screen is hidden on start
+  hideGameOverScreen();
   
   // Log initialization
   console.log('Game initialized');
