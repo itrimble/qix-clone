@@ -52,6 +52,13 @@ function toggleSettings() {
 export function initControls(canvas: HTMLCanvasElement, scene: THREE.Scene, camera: THREE.Camera): void {
   console.log('Initializing controls...');
 
+  // Get touch control elements
+  const touchUp = document.getElementById('touch-up');
+  const touchDown = document.getElementById('touch-down');
+  const touchLeft = document.getElementById('touch-left');
+  const touchRight = document.getElementById('touch-right');
+  const touchAction = document.getElementById('touch-action');
+
   // Clear any existing key states
   Object.keys(keys).forEach(key => delete keys[key]);
   
@@ -174,6 +181,41 @@ export function initControls(canvas: HTMLCanvasElement, scene: THREE.Scene, came
   
   // Expose keys globally for debugging
   (window as any).gameKeys = keys;
+
+  // --- Touch Controls Implementation ---
+  const handleTouch = (keyName: string, isPressed: boolean, event: TouchEvent) => {
+    event.preventDefault(); // Prevent default browser actions like scrolling or zooming
+    keys[keyName] = isPressed;
+    console.log(`Touch ${isPressed ? 'start' : 'end'}: ${keyName}`);
+  };
+
+  if (touchUp) {
+    touchUp.addEventListener('touchstart', (e) => handleTouch('w', true, e), { passive: false });
+    touchUp.addEventListener('touchend', (e) => handleTouch('w', false, e), { passive: false });
+    touchUp.addEventListener('touchcancel', (e) => handleTouch('w', false, e), { passive: false });
+  }
+  if (touchDown) {
+    touchDown.addEventListener('touchstart', (e) => handleTouch('s', true, e), { passive: false });
+    touchDown.addEventListener('touchend', (e) => handleTouch('s', false, e), { passive: false });
+    touchDown.addEventListener('touchcancel', (e) => handleTouch('s', false, e), { passive: false });
+  }
+  if (touchLeft) {
+    touchLeft.addEventListener('touchstart', (e) => handleTouch('a', true, e), { passive: false });
+    touchLeft.addEventListener('touchend', (e) => handleTouch('a', false, e), { passive: false });
+    touchLeft.addEventListener('touchcancel', (e) => handleTouch('a', false, e), { passive: false });
+  }
+  if (touchRight) {
+    touchRight.addEventListener('touchstart', (e) => handleTouch('d', true, e), { passive: false });
+    touchRight.addEventListener('touchend', (e) => handleTouch('d', false, e), { passive: false });
+    touchRight.addEventListener('touchcancel', (e) => handleTouch('d', false, e), { passive: false });
+  }
+  if (touchAction) {
+    touchAction.addEventListener('touchstart', (e) => handleTouch(' ', true, e), { passive: false });
+    touchAction.addEventListener('touchend', (e) => handleTouch(' ', false, e), { passive: false });
+    touchAction.addEventListener('touchcancel', (e) => handleTouch(' ', false, e), { passive: false });
+  }
+  console.log('Touch controls initialized.');
+  // --- End Touch Controls Implementation ---
 
   // Gamepad API Integration
   function handleGamepadConnected(event: GamepadEvent) {

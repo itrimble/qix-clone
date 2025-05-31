@@ -276,3 +276,76 @@ body.dark-mode .modal {
   transform: scale(0.97);
   background: #cc0000;
 }
+
+/* On-screen Touch Controls */
+#touch-controls {
+  position: absolute;
+  bottom: 30px; /* Adjusted for more space from edge */
+  left: 30px;   /* Adjusted for more space from edge */
+  z-index: 1000;
+  display: grid;
+  grid-template-areas:
+    ". touch-up ."
+    "touch-left . touch-right"
+    ". touch-down .";
+  gap: 15px; /* Increased space between D-pad buttons */
+  opacity: 0.8; /* Make controls slightly transparent */
+}
+
+#touch-controls button {
+  width: 75px;  /* Increased size for easier tapping */
+  height: 75px; /* Increased size for easier tapping */
+  font-size: 28px; /* Larger font for visibility, fixed unit */
+  background-color: rgba(0, 100, 100, 0.7); /* Tealish, semi-transparent */
+  color: cyan;
+  border: 2px solid cyan;
+  border-radius: 10px; /* Rounded corners */
+  display: flex; /* For centering content if needed */
+  align-items: center; /* Center text vertically */
+  justify-content: center; /* Center text horizontally */
+}
+
+#touch-up {
+  grid-area: touch-up;
+}
+
+#touch-down {
+  grid-area: touch-down;
+}
+
+#touch-left {
+  grid-area: touch-left;
+}
+
+#touch-right {
+  grid-area: touch-right;
+}
+
+#action-button-container {
+  position: absolute;
+  bottom: 30px; /* Adjusted for more space from edge */
+  right: 30px;  /* Adjusted for more space from edge */
+  z-index: 1000;
+  opacity: 0.8; /* Make controls slightly transparent */
+}
+
+#touch-action {
+  width: 110px; /* Increased size for easier tapping */
+  height: 110px; /* Increased size for easier tapping */
+  font-size: 36px; /* Larger font for visibility, fixed unit */
+  background-color: rgba(100, 0, 0, 0.7); /* Reddish, semi-transparent */
+  color: pink;
+  border: 2px solid red;
+  border-radius: 50%; /* Make it circular */
+  display: flex; /* For centering content */
+  align-items: center; /* Center text vertically */
+  justify-content: center; /* Center text horizontally */
+}
+
+/* Add a general active state for touch buttons for visual feedback */
+#touch-controls button:active,
+#touch-action:active {
+  background-color: rgba(0, 0, 0, 0.4); /* Darker background on press */
+  opacity: 0.9; /* Slightly more opaque on press */
+  transform: scale(0.95); /* Slight shrink effect */
+}
