@@ -11,6 +11,11 @@ const STORAGE_KEY_HIGH_SCORE = 'qixCloneGame_highScore';
 const STORAGE_KEY_MAX_AREA = 'qixCloneGame_maxAreaCaptured';
 
 // Global variables
+interface CapturedAreaData {
+  mesh: THREE.Mesh;
+  shape: THREE.Shape;
+}
+
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
 let renderer: THREE.WebGLRenderer;
@@ -22,7 +27,7 @@ let isDrawing = false; // Tracks if the player is currently drawing a trail
 
 const gridLimit = 14; // Defines the boundary for starting/ending drawing
 const totalGameArea = (2 * gridLimit) * (2 * gridLimit); // Total area of the game grid
-let capturedAreas: THREE.Mesh[] = []; // Stores meshes of captured areas
+let capturedAreaDataList: CapturedAreaData[] = []; // Changed from capturedAreas
 let qix: QixEnemy;
 let sparxEnemies: SparxEnemy[] = [];
 let playerSpeedMultiplier = { value: 1.0 };
@@ -504,8 +509,8 @@ function trySpawnPowerUp(dt: number) {
         new THREE.Vector3(x - POWERUP_SIZE / 2, y - POWERUP_SIZE / 2, -0.1),
         new THREE.Vector3(x + POWERUP_SIZE / 2, y + POWERUP_SIZE / 2, 0.1)
       );
-      for (const areaMesh of capturedAreas) { // capturedAreas is the array of THREE.Mesh for filled zones
-        const areaBox = new THREE.Box3().setFromObject(areaMesh);
+      for (const areaData of capturedAreaDataList) {
+        const areaBox = new THREE.Box3().setFromObject(areaData.mesh);
         if (powerUpBox.intersectsBox(areaBox)) {
           overlapsCapturedArea = true;
           break;
@@ -552,7 +557,8 @@ function animate() {
 
   // Update Qix Enemy
   if (qix) {
-    qix.update(deltaTime);
+    const shapesForCollision = capturedAreaDataList.map(data => data.shape);
+    qix.update(deltaTime, shapesForCollision);
   }
 
   // Update Sparx Enemies
@@ -706,12 +712,23 @@ function animate() {
           if (chosenPolygonVertices && actualFilledArea > 0) {
             console.log(`Selected polygon with area: ${actualFilledArea.toFixed(2)}`);
 
-            const shape = new THREE.Shape(chosenPolygonVertices);
+            const shape = new THREE.Shape(chosenPolygonVertices); // This is the 'shape' instance we need
             const geometry = new THREE.ShapeGeometry(shape);
             const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }); // Changed color for testing
             const capturedMesh = new THREE.Mesh(geometry, material);
             scene.add(capturedMesh);
-            capturedAreas.push(capturedMesh);
+            capturedAreaDataList.push({ mesh: capturedMesh, shape: shape }); // Store mesh and shape
+
+            // Deactivate Fuse if active upon successful capture
+            if (fuseActiveOnTrail) {
+              for (const sparx_fuse_check of sparxEnemies) { // Renamed sparx to avoid conflict
+                if (sparx_fuse_check.isFuse) {
+                  sparx_fuse_check.deactivateFuseMode();
+                  console.log("Active Fuse Sparx deactivated due to area capture.");
+                }
+              }
+              fuseActiveOnTrail = false;
+            }
 
             const newlyCapturedPercent = (actualFilledArea / totalGameArea) * 100;
             gameState.captured += newlyCapturedPercent;

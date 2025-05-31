@@ -52,24 +52,49 @@ export class QixEnemy {
      this.mesh.geometry.computeBoundingSphere(); // Important for some collision checks if we use it
   }
 
-  update(deltaTime: number): void {
+  public update(deltaTime: number, capturedShapes: THREE.Shape[] = []): void {
     if (this.isFrozen) {
       return; // Completely skip update if frozen
     }
     this.time += ANIMATION_SPEED * deltaTime * 50; // deltaTime can be small, scale it
 
-    // Move position
+    const oldPosition = this.position.clone();
+
+    // Tentatively update position based on velocity
     this.position.x += this.velocity.x;
     this.position.y += this.velocity.y;
 
-    // Bounce off confinement walls
+    let bouncedOffCapturedArea = false;
+    if (capturedShapes && capturedShapes.length > 0) {
+      const currentPositionVec2 = new THREE.Vector2(this.position.x, this.position.y);
+      for (const shape of capturedShapes) {
+        if (shape.containsPoint(currentPositionVec2)) {
+          this.position.copy(oldPosition);
+          this.velocity.x *= -1;
+          this.velocity.y *= -1;
+          console.log("Qix bounced off captured area!");
+          bouncedOffCapturedArea = true;
+          break;
+        }
+      }
+    }
+
+    // Original outer wall bouncing logic
     if (this.position.x <= this.confinement.minX || this.position.x >= this.confinement.maxX) {
-      this.velocity.x *= -1;
-      this.position.x = Math.max(this.confinement.minX, Math.min(this.confinement.maxX, this.position.x)); // Clamp
+      if (!bouncedOffCapturedArea ||
+          (this.position.x <= this.confinement.minX && this.velocity.x < 0) ||
+          (this.position.x >= this.confinement.maxX && this.velocity.x > 0) ) {
+          this.velocity.x *= -1;
+      }
+      this.position.x = Math.max(this.confinement.minX, Math.min(this.confinement.maxX, this.position.x));
     }
     if (this.position.y <= this.confinement.minY || this.position.y >= this.confinement.maxY) {
-      this.velocity.y *= -1;
-      this.position.y = Math.max(this.confinement.minY, Math.min(this.confinement.maxY, this.position.y)); // Clamp
+      if (!bouncedOffCapturedArea ||
+          (this.position.y <= this.confinement.minY && this.velocity.y < 0) ||
+          (this.position.y >= this.confinement.maxY && this.velocity.y > 0) ) {
+          this.velocity.y *= -1;
+      }
+      this.position.y = Math.max(this.confinement.minY, Math.min(this.confinement.maxY, this.position.y));
     }
 
     this.updateLineGeometry();
