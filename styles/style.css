@@ -237,3 +237,11 @@ body.dark-mode .modal {
   filter: blur(3px) brightness(0.6);
   transition: filter 0.3s ease-out; /* Smooth transition for the filter */
 }
+
+.stats-divider {
+  margin-top: 20px; /* More space before separator */
+  margin-bottom: 10px; /* More space after separator */
+  color: #00ffff; /* Cyan */
+  font-size: 1em;  /* Slightly larger for visibility */
+  letter-spacing: 1px;
+}

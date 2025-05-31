@@ -6,6 +6,10 @@ import { QixEnemy } from './game/qix_enemy';
 import { SparxEnemy } from './game/sparx_enemy';
 import { PowerUp, PowerUpType, FreezeQixPowerUp, PlayerSpeedBoostPowerUp, GameTargets } from './game/powerup';
 
+// LocalStorage Keys
+const STORAGE_KEY_HIGH_SCORE = 'qixCloneGame_highScore';
+const STORAGE_KEY_MAX_AREA = 'qixCloneGame_maxAreaCaptured';
+
 // Global variables
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
@@ -37,6 +41,8 @@ let gameOverOverlay: HTMLElement | null;
 let finalScoreEl: HTMLElement | null;
 let finalAreaEl: HTMLElement | null;
 let restartButton: HTMLElement | null;
+let highScoreDisplayEl: HTMLElement | null;
+let maxAreaDisplayEl: HTMLElement | null;
 // Note: 'canvas' is already our reference to the game canvas element
 
 // --- Intersection Detection Utilities ---
@@ -301,18 +307,88 @@ const gameState = {
   level: 1
 };
 
+// --- LocalStorage Helper Functions ---
+function loadHighScore(): number {
+  try {
+    const storedScoreStr = localStorage.getItem(STORAGE_KEY_HIGH_SCORE);
+    if (storedScoreStr !== null) {
+      const score = parseFloat(storedScoreStr);
+      return isNaN(score) ? 0 : score;
+    }
+  } catch (e) {
+    console.error("Error loading high score from localStorage:", e);
+  }
+  return 0;
+}
+
+function saveHighScore(newScore: number): void {
+  try {
+    const currentHighScore = loadHighScore();
+    if (newScore > currentHighScore) {
+      localStorage.setItem(STORAGE_KEY_HIGH_SCORE, newScore.toString());
+      console.log(`New High Score saved: ${newScore}`);
+    }
+  } catch (e) {
+    console.error("Error saving high score to localStorage:", e);
+  }
+}
+
+function loadMaxArea(): number {
+  try {
+    const storedAreaStr = localStorage.getItem(STORAGE_KEY_MAX_AREA);
+    if (storedAreaStr !== null) {
+      const area = parseFloat(storedAreaStr);
+      return isNaN(area) ? 0 : area;
+    }
+  } catch (e) {
+    console.error("Error loading max area from localStorage:", e);
+  }
+  return 0;
+}
+
+function saveMaxArea(newArea: number): void {
+  try {
+    const currentMaxArea = loadMaxArea();
+    const formattedNewArea = parseFloat(newArea.toFixed(1)); // Consistent precision
+
+    if (formattedNewArea > currentMaxArea) {
+      localStorage.setItem(STORAGE_KEY_MAX_AREA, formattedNewArea.toString());
+      console.log(`New Max Area Captured saved: ${formattedNewArea}%`);
+    }
+  } catch (e) {
+    console.error("Error saving max area to localStorage:", e);
+  }
+}
+// --- End LocalStorage Helper Functions ---
+
 // --- Game Over Screen Functions ---
 function showGameOverScreen() {
+  // Ensure gameState reflects the final values for the game just ended
+  saveHighScore(gameState.score);
+  saveMaxArea(gameState.captured);
+
   if (gameOverOverlay && finalScoreEl && finalAreaEl && canvas ) {
     finalScoreEl.textContent = gameState.score.toString();
-    finalAreaEl.textContent = gameState.captured.toFixed(1); // Format to 1 decimal place
+    finalAreaEl.textContent = gameState.captured.toFixed(1); // Format to 1 decimal place for current game display
+
+    if (highScoreDisplayEl && maxAreaDisplayEl) {
+      const allTimeHighScore = loadHighScore();
+      const allTimeMaxArea = loadMaxArea();
+
+      highScoreDisplayEl.textContent = allTimeHighScore.toString();
+      maxAreaDisplayEl.textContent = allTimeMaxArea.toFixed(1); // Consistent formatting
+
+      console.log(`Displayed All-Time High Score: ${allTimeHighScore}, Max Area: ${allTimeMaxArea}%`);
+    } else {
+      console.error("DOM elements for displaying best stats not found!");
+    }
 
     gameOverOverlay.classList.remove('hidden');
-    canvas.classList.add('game-canvas-paused'); // Apply blur/dim effect
+    canvas.classList.add('game-canvas-paused');
 
-    console.log("Game Over Screen Shown");
+    console.log("Game Over Screen Shown. Scores saved (if new records). Best stats displayed.");
   } else {
-    console.error("Game Over screen DOM elements not found!");
+    console.error("Game Over screen DOM elements not found for showing!");
   }
 }
 
@@ -836,6 +912,8 @@ window.onload = () => {
   finalScoreEl = document.getElementById('final-score');
   finalAreaEl = document.getElementById('final-area');
   restartButton = document.getElementById('restart-button');
+  highScoreDisplayEl = document.getElementById('high-score-display');
+  maxAreaDisplayEl = document.getElementById('max-area-display');
   // 'canvas' is already assigned earlier in window.onload
 
   // Add event listener for restart button
