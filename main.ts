@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { initControls, keys } from './ui/controls';
 import { initTrail, updateTrail, clearTrail, getTrailPoints } from './game/trail';
 import { createScene, updateScene, player } from './game/engine';
+import { QixEnemy } from './game/qix_enemy';
+import { SparxEnemy } from './game/sparx_enemy';
 
 // Global variables
 let scene: THREE.Scene;
@@ -16,6 +18,8 @@ let isDrawing = false; // Tracks if the player is currently drawing a trail
 const gridLimit = 14; // Defines the boundary for starting/ending drawing
 const totalGameArea = (2 * gridLimit) * (2 * gridLimit); // Total area of the game grid
 let capturedAreas: THREE.Mesh[] = []; // Stores meshes of captured areas
+let qix: QixEnemy;
+let sparxEnemies: SparxEnemy[] = [];
 
 // --- Intersection Detection Utilities ---
 
@@ -284,10 +288,60 @@ function animate() {
   if (!running) return;
   
   requestAnimationFrame(animate);
+
+  const now = performance.now();
+  const deltaTime = (now - lastTime) / 1000.0; // deltaTime in seconds
+  // lastTime is updated later, before rendering debug info.
   
   // Update game state
   updateScene(scene);
-  
+
+  // Update Qix Enemy
+  if (qix) {
+    qix.update(deltaTime);
+  }
+
+  // Update Sparx Enemies
+  for (const sparx of sparxEnemies) {
+    sparx.update(deltaTime);
+  }
+
+  // Player-Sparx Collision Check (Player on Boundary)
+  if (!isDrawing && running) { // Only check if not drawing and game is running
+    const playerOnBoundary =
+      Math.abs(Math.abs(player.position.x) - gridLimit) < 0.1 ||
+      Math.abs(Math.abs(player.position.y) - gridLimit) < 0.1;
+
+    if (playerOnBoundary) {
+      const PLAYER_SIZE = 2.0;
+      const SPARX_SIZE = 0.5; // From SparxEnemy.SPARX_SIZE
+      const collisionThreshold = (PLAYER_SIZE / 2) + (SPARX_SIZE / 2);
+
+      for (const sparx of sparxEnemies) {
+        // Ensure sparx.mesh and player.position are valid THREE.Vector3 instances
+        // player.position is already a Vector3 from the engine
+        // sparx.mesh.position is also a Vector3
+        const distance = player.position.distanceTo(sparx.mesh.position);
+        if (distance < collisionThreshold) {
+          console.log("Player hit by Sparx on boundary!");
+          gameState.lives--;
+
+          if (gameState.lives > 0) {
+            player.position.set(-gridLimit, -gridLimit, 0); // Reposition to bottom-left corner
+            console.log(`Player repositioned after Sparx collision. Lives: ${gameState.lives}`);
+          } else { // gameState.lives <= 0
+            console.log("GAME OVER - Hit by Sparx!");
+            running = false;
+          }
+          // isDrawing is already false.
+          // No trail to clear as player wasn't drawing.
+          // Potentially add a brief invulnerability period or player respawn logic here
+          break; // Player hit, no need to check other Sparx this frame.
+        }
+      }
+    }
+  }
+
   // Check for spacebar press to start drawing
   if (keys[' '] && !spacebarWasPressed && !isDrawing) { // Check !isDrawing to prevent re-triggering
     const onBoundary = Math.abs(player.position.x) >= gridLimit || Math.abs(player.position.y) >= gridLimit;
@@ -386,7 +440,46 @@ function animate() {
   if (isDrawing) {
     updateTrail(scene, player.position);
 
+    // --- Player-Qix Collision Check ---
+    if (qix) { // Ensure qix exists
+      const playerTrailVec3_qixCheck = getTrailPoints();
+      if (playerTrailVec3_qixCheck.length >= 2) {
+        const playerTrailVec2_qixCheck = playerTrailVec3_qixCheck.map(p => new THREE.Vector2(p.x, p.y));
+        const qixBodySegments = qix.getLineSegments();
+
+        let collisionWithQixDetected = false;
+        for (let i = 0; i < playerTrailVec2_qixCheck.length - 1; i++) {
+          const trailSegP1 = playerTrailVec2_qixCheck[i];
+          const trailSegP2 = playerTrailVec2_qixCheck[i+1];
+
+          for (const qixSeg of qixBodySegments) {
+            if (segmentsIntersect(trailSegP1, trailSegP2, qixSeg.p1, qixSeg.p2)) {
+              console.log("Player trail hit Qix!");
+              gameState.lives--;
+              isDrawing = false;
+              clearTrail(scene);
+
+              if (gameState.lives > 0) {
+                player.position.set(-gridLimit, -gridLimit, 0); // Reposition to bottom-left corner
+                console.log(`Player repositioned after Qix collision. Lives: ${gameState.lives}`);
+              } else { // gameState.lives <= 0
+                console.log("GAME OVER - Hit Qix!");
+                running = false;
+              }
+              collisionWithQixDetected = true;
+              break; // Break from inner qixSeg loop
+            }
+          }
+          if (collisionWithQixDetected) {
+            break; // Break from outer playerTrail loop
+          }
+        }
+      }
+    }
+    // --- End Player-Qix Collision Check ---
+
     // --- Self-Intersection Check ---
+    // This check will only run if isDrawing is still true (i.e., no Qix collision occurred)
     const trailForCheck = getTrailPoints(); // Get fresh points (Vector3)
 
     if (trailForCheck.length >= 4) { // Need at least 4 points for a possible self-intersection of non-adjacent segments
@@ -426,9 +519,9 @@ function animate() {
   renderer.render(scene, camera);
   
   // Update debug info
-  const now = performance.now();
-  const fps = 1000 / (now - lastTime);
-  lastTime = now;
+  // const now = performance.now(); // 'now' is already calculated for deltaTime
+  const fps = 1000 / (now - lastTime); // This will be high if lastTime isn't updated correctly before this
+  lastTime = now; // Update lastTime for the next frame's deltaTime and current frame's FPS
   
   if (debugDiv) {
     const activeKeys = Object.entries(keys).filter(([k, v]) => v).map(([k]) => k);
@@ -488,6 +581,29 @@ window.onload = () => {
   // Initialize trail
   console.log('Setting up trail...');
   initTrail(scene);
+
+  // Initialize Qix Enemy
+  console.log('Setting up Qix enemy...');
+  const qixSpawnPos = new THREE.Vector2(0, 0); // Or random within bounds
+  const qixConfinement = {
+      minX: -gridLimit + 1, maxX: gridLimit - 1,
+      minY: -gridLimit + 1, maxY: gridLimit - 1
+  };
+  qix = new QixEnemy(qixSpawnPos, qixConfinement);
+  scene.add(qix.mesh);
+
+  // Initialize Sparx Enemies
+  console.log('Setting up Sparx enemies...');
+  // Ensure 'orderedCorners' is defined and accessible here. It is defined at module scope.
+  const sparx1StartPos = blCorner.clone(); // Start at Bottom-Left
+  const sparx1 = new SparxEnemy(0, sparx1StartPos, 1, gridLimit, orderedCorners); // Seg 0 (Bottom), Dir 1 (Right)
+  sparxEnemies.push(sparx1);
+  scene.add(sparx1.mesh);
+
+  const sparx2StartPos = trCorner.clone(); // Start at Top-Right
+  const sparx2 = new SparxEnemy(2, sparx2StartPos, -1, gridLimit, orderedCorners); // Seg 2 (Top), Dir -1 (Left)
+  sparxEnemies.push(sparx2);
+  scene.add(sparx2.mesh);
   
   // Set up event listeners
   window.addEventListener('resize', handleResize);
