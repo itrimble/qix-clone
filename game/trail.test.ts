@@ -1,154 +1,193 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { initTrail, updateTrail, clearTrail, getTrailPoints, MAX_TRAIL_POINTS } from './trail';
 import * as Materials from './materials'; // To mock createTrailMaterial
 
 // Mock THREE.js components used by trail.ts
+// Keep essential mocks, ensure BufferAttribute.array can be spied on or checked
 vi.mock('three', async (importOriginal) => {
   const actualThree = await importOriginal() as any;
   return {
     ...actualThree,
-    Line: vi.fn().mockImplementation(function (geometry, material) {
-      this.geometry = geometry; // geometry should be an instance of the mocked BufferGeometry
+    Line: vi.fn().mockImplementation(function (this: any, geometry: any, material: any) {
+      this.geometry = geometry;
       this.material = material;
-      this.frustumCulled = false; // a property often set
+      this.frustumCulled = false;
       this.dispose = vi.fn();
+      this.parent = { remove: vi.fn() }; // Mock parent for removal
       return this;
     }),
-    BufferGeometry: vi.fn().mockImplementation(function () {
+    BufferGeometry: vi.fn().mockImplementation(function (this: any) {
       this.setAttribute = vi.fn();
       this.dispose = vi.fn();
-      this.getAttribute = vi.fn().mockReturnValue(undefined); // Start with no attributes
-      this.setDrawRange = vi.fn(); // setDrawRange is used in trail.ts
+      this.getAttribute = vi.fn().mockImplementation((name: string) => {
+        if (name === 'position' && this.attributes && this.attributes.position) {
+          return this.attributes.position;
+        }
+        return undefined;
+      });
+      this.setDrawRange = vi.fn();
+      this.attributes = { position: undefined }; // To store the attribute later
       return this;
     }),
+    BufferAttribute: actualThree.BufferAttribute, // Use actual for spy target
+    Float32BufferAttribute: actualThree.Float32BufferAttribute, // Use actual for spy target
     Vector3: actualThree.Vector3,
-    Float32BufferAttribute: actualThree.Float32BufferAttribute,
+    LineBasicMaterial: actualThree.LineBasicMaterial, // For material mock
   };
 });
 
 // Mock material creation
-vi.mock('./materials', () => ({
-  createTrailMaterial: vi.fn().mockReturnValue(new THREE.LineBasicMaterial({ color: 0xff0000 })),
-}));
+vi.mock('./materials', () => {
+  // Define and initialize the mock instance *inside* the factory to avoid hoisting issues.
+  const mockTrailMaterialInFactory = new THREE.LineBasicMaterial({ color: 0xff0000 });
+  return {
+    createTrailMaterial: vi.fn().mockReturnValue(mockTrailMaterialInFactory),
+  };
+});
 
-describe('Trail Logic', () => {
-  let sceneMock: any; // Use 'any' for mocked THREE.Scene
+describe('Trail Logic (Optimized)', () => {
+  let sceneMock: any;
+  let mockPositionAttribute: THREE.BufferAttribute;
+  let mockPositionsArray: Float32Array;
 
   beforeEach(() => {
-    // Create a new Scene mock for each test to ensure fresh spies
     sceneMock = {
         add: vi.fn(),
         remove: vi.fn(),
-        // Add any other scene properties/methods used by trail.ts if necessary
-    } as any; // Cast to any to satisfy THREE.Scene type while using a simple object
+    } as any;
 
-    // Reset internal state of trail.ts by clearing points and line.
-    // This is crucial because trailPoints and trailLine are module-scoped.
-    clearTrail(sceneMock); // Call the actual clearTrail to reset module state
-    vi.clearAllMocks(); // Clear mock call counts AFTER resetting state
+    // For the optimized version, the BufferAttribute and its array are created once.
+    // We need to mock/spy on this array to check updates.
+    // This setup assumes initTrail will use a BufferAttribute with an underlying Float32Array.
+    mockPositionsArray = new Float32Array(MAX_TRAIL_POINTS * 3);
+    mockPositionAttribute = new THREE.BufferAttribute(mockPositionsArray, 3);
 
-    // Re-mock scene methods for the current test since clearAllMocks clears them
-    // if they were part of a global mock. If sceneMock is locally created like above,
-    // its spies are fresh per test anyway.
-    // For safety, if sceneMock was from a global vi.mock('three', ...), re-spy here:
-    // vi.spyOn(sceneMock, 'add');
-    // vi.spyOn(sceneMock, 'remove');
+    // When THREE.BufferGeometry is constructed by initTrail, and setAttribute is called,
+    // we can intercept it to store our mockPositionAttribute.
+    (THREE.BufferGeometry as any).mockImplementation(function (this: any) {
+        this.setAttribute = vi.fn((name: string, attribute: THREE.BufferAttribute) => {
+            if (name === 'position') {
+                // Instead of using the attribute passed (which would be a new one each time in unmocked code),
+                // assign our pre-defined spyable attribute here.
+                this.attributes = { position: mockPositionAttribute };
+            }
+        });
+        this.dispose = vi.fn();
+        this.getAttribute = vi.fn().mockImplementation((name: string) => {
+            if (name === 'position') return this.attributes.position;
+            return undefined;
+        });
+        this.setDrawRange = vi.fn();
+        this.attributes = { position: undefined }; // Ensure it's there
+        return this;
+    });
+
+    // Reset internal state of trail.ts by calling its functions
+    // clearTrail might be called by initTrail or other places, ensure it's clean first.
+    // The actual clearTrail will operate on the module-scoped trailLine.
+    clearTrail(sceneMock); // Clears trailPoints, currentTrailLength and drawRange on existing trailLine
+    vi.clearAllMocks(); // Clear mocks after potential calls in clearTrail
+
+    // Re-initialize sceneMock spies if clearAllMocks affected them (it does)
+     sceneMock.add = vi.fn();
+     sceneMock.remove = vi.fn();
+
+    // Call initTrail here to set up trailLine with the mocked BufferGeometry/Attribute
+    initTrail(sceneMock);
   });
 
-  it('initTrail should initialize the trail system', () => {
-    initTrail(sceneMock);
 
-    expect(Materials.createTrailMaterial).toHaveBeenCalled();
-    // BufferGeometry is newed up inside initTrail, then a line is created with it.
+  it('initTrail should initialize with a pre-allocated buffer and drawRange 0', () => {
+    expect(Materials.createTrailMaterial).toHaveBeenCalled(); // This will now correctly point to the mocked version
     expect(THREE.BufferGeometry).toHaveBeenCalled();
-    expect(THREE.Line).toHaveBeenCalled();
+
     const lineInstance = (THREE.Line as any).mock.results[0].value;
     expect(sceneMock.add).toHaveBeenCalledWith(lineInstance);
+
+    const geometryInstance = lineInstance.geometry;
+    expect(geometryInstance.setAttribute).toHaveBeenCalledWith('position', expect.any(THREE.BufferAttribute));
+    const posAttribute = geometryInstance.getAttribute('position') as THREE.BufferAttribute;
+    expect(posAttribute.array.length).toBe(MAX_TRAIL_POINTS * 3);
+
+    expect(geometryInstance.setDrawRange).toHaveBeenCalledWith(0, 0);
     expect(getTrailPoints()).toEqual([]);
   });
 
-  it('updateTrail should add a point and update the line geometry', () => {
-    initTrail(sceneMock);
+  it('updateTrail should add a point to buffer, update needsUpdate and drawRange', () => {
     const point1 = new THREE.Vector3(1, 2, 3);
-
-    // Before updateTrail, BufferGeometry's setAttribute should not have been called with actual points
-    const lineInstance = (THREE.Line as any).mock.results[0].value;
-    expect(lineInstance.geometry.setAttribute).not.toHaveBeenCalledWith('position', expect.any(THREE.Float32BufferAttribute));
-
     updateTrail(sceneMock, point1);
+
+    expect(mockPositionsArray[0]).toBe(point1.x);
+    expect(mockPositionsArray[1]).toBe(point1.y);
+    expect(mockPositionsArray[2]).toBe(point1.z);
+
+    const lineInstance = (THREE.Line as any).mock.results[0].value;
+    const geometryInstance = lineInstance.geometry;
+    const posAttribute = geometryInstance.getAttribute('position') as THREE.BufferAttribute;
+
+    expect(posAttribute.needsUpdate).toBe(true);
+    expect(geometryInstance.setDrawRange).toHaveBeenCalledWith(0, 1); // 1 point added
 
     const trailPoints = getTrailPoints();
     expect(trailPoints.length).toBe(1);
-    expect(trailPoints[0]).toEqual(point1);
-
-    // Check that the geometry was updated
-    expect(lineInstance.geometry.setAttribute).toHaveBeenCalledWith('position', expect.any(THREE.Float32BufferAttribute));
-    // Check if the buffer attribute has the correct values (1 point * 3 coordinates)
-    const bufferAttributeArgs = (lineInstance.geometry.setAttribute as any).mock.calls[0][1];
-    expect(bufferAttributeArgs.array.length).toBe(MAX_TRAIL_POINTS * 3); // Buffer is full size
-    expect(bufferAttributeArgs.array[0]).toBe(1);
-    expect(bufferAttributeArgs.array[1]).toBe(2);
-    expect(bufferAttributeArgs.array[2]).toBe(3);
-    expect(lineInstance.geometry.setDrawRange).toHaveBeenCalledWith(0, 1);
+    expect(trailPoints[0].equals(point1)).toBe(true);
   });
 
-  it('updateTrail should limit trail length to MAX_TRAIL_POINTS (500)', () => {
-    initTrail(sceneMock);
-    for (let i = 0; i < MAX_TRAIL_POINTS + 10; i++) { // Add 510 points
+  it('updateTrail should handle buffer when not full', () => {
+    for (let i = 0; i < 10; i++) {
       updateTrail(sceneMock, new THREE.Vector3(i, i, i));
     }
-    const trailPoints = getTrailPoints();
-    expect(trailPoints.length).toBe(MAX_TRAIL_POINTS);
-    // Oldest point should be (10,10,10) after 510 additions (points 0-9 are removed)
-    expect(trailPoints[0].x).toBe(10);
-    expect(trailPoints[0].y).toBe(10);
-    expect(trailPoints[0].z).toBe(10);
-    // Newest point
-    expect(trailPoints[MAX_TRAIL_POINTS-1].x).toBe(MAX_TRAIL_POINTS + 9);
+    const lineInstance = (THREE.Line as any).mock.results[0].value;
+    expect(lineInstance.geometry.setDrawRange).toHaveBeenCalledWith(0, 10);
+    expect(getTrailPoints().length).toBe(10);
+    expect(mockPositionsArray[9 * 3]).toBe(9); // Check last added point
   });
 
-  it('clearTrail should remove the trail and reset points', () => {
-    initTrail(sceneMock); // This creates a line and geometry
-    updateTrail(sceneMock, new THREE.Vector3(1,1,1));
+  it('updateTrail should handle buffer when full and overwrite oldest points', () => {
+    // Fill the buffer
+    for (let i = 0; i < MAX_TRAIL_POINTS; i++) {
+      updateTrail(sceneMock, new THREE.Vector3(i, i, i));
+    }
+    expect(getTrailPoints().length).toBe(MAX_TRAIL_POINTS);
+    expect(mockPositionsArray[(MAX_TRAIL_POINTS - 1) * 3]).toBe(MAX_TRAIL_POINTS - 1);
+
+    // Add one more point, which should overwrite the oldest
+    const newPoint = new THREE.Vector3(MAX_TRAIL_POINTS, MAX_TRAIL_POINTS, MAX_TRAIL_POINTS);
+    updateTrail(sceneMock, newPoint);
+
+    expect(getTrailPoints().length).toBe(MAX_TRAIL_POINTS);
+    // The internal trailPoints array has shifted, and the buffer is rewritten.
+    // The first point in the buffer should now be original point 1 (value 1)
+    expect(mockPositionsArray[0]).toBe(1);
+    // The last point in the buffer should be newPoint
+    expect(mockPositionsArray[(MAX_TRAIL_POINTS - 1) * 3]).toBe(newPoint.x);
 
     const lineInstance = (THREE.Line as any).mock.results[0].value;
-    // Spy on the dispose method of the specific geometry instance created by initTrail
-    const geometryDisposeSpy = vi.spyOn(lineInstance.geometry, 'dispose');
+    expect(lineInstance.geometry.setDrawRange).toHaveBeenCalledWith(0, MAX_TRAIL_POINTS);
+  });
+
+  it('clearTrail should reset drawRange to 0 and clear internal points array', () => {
+    updateTrail(sceneMock, new THREE.Vector3(1,1,1)); // Add a point
 
     clearTrail(sceneMock);
 
-    expect(sceneMock.remove).toHaveBeenCalledWith(lineInstance);
-    expect(geometryDisposeSpy).toHaveBeenCalled();
+    const lineInstance = (THREE.Line as any).mock.results[0].value; // line should still exist
+    expect(lineInstance.geometry.setDrawRange).toHaveBeenCalledWith(0, 0);
     expect(getTrailPoints()).toEqual([]);
-
-    // Check if trailLine (internal variable) is null.
-    // One way: initTrail again should create a new line if trailLine was reset.
-    const firstLineInstance = lineInstance;
-    initTrail(sceneMock); // Should create a new line. This is the 2nd Line mock instance.
-    // The mock stores results in order. Since clearAllMocks was called in beforeEach,
-    // initTrail in this test is the first call to THREE.Line constructor for this test's mock set.
-    // However, clearTrail itself might call initTrail if it's designed to reset to an empty trail line.
-    // Current trail.ts clearTrail does not call initTrail. It nulls trailLine.
-    // So, the next initTrail call will be the second overall in this test's lifecycle (first one at the top of test).
-
-    // If beforeEach's clearTrail calls sceneMock.remove, then vi.clearAllMocks() will clear that call.
-    // The calls to initTrail are:
-    // 1. In this test: initTrail(sceneMock); -> first Line instance
-    // 2. After clearTrail: initTrail(sceneMock); -> second Line instance
-    // So we expect mock.results[1] for the second instance.
-    const newLineInstance = (THREE.Line as any).mock.results[1].value;
-    expect(newLineInstance).not.toBe(firstLineInstance);
   });
 
-  it('getTrailPoints should return a deep copy of trail points', () => {
-    initTrail(sceneMock);
+  it('getTrailPoints should return a deep copy of currently active trail points', () => {
+    initTrail(sceneMock); // Re-init to be sure about trailLine instance for this test
     const point1 = new THREE.Vector3(1,2,3);
     updateTrail(sceneMock, point1);
+    const point2 = new THREE.Vector3(4,5,6);
+    updateTrail(sceneMock, point2);
 
     const retrievedPoints = getTrailPoints();
-    expect(retrievedPoints).toEqual([point1]); // Checks for value equality
-    expect(retrievedPoints[0]).toBeInstanceOf(THREE.Vector3);
-    expect(retrievedPoints[0]).not.toBe(point1); // Ensure it's a clone, not the same instance
+    expect(retrievedPoints.length).toBe(2);
+    expect(retrievedPoints).toEqual([point1, point2]);
+    expect(retrievedPoints[0]).not.toBe(point1); // Ensure it's a clone
+    expect(retrievedPoints[1]).not.toBe(point2);
   });
 });
