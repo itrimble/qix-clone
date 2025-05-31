@@ -5,6 +5,7 @@ import { createScene, updateScene, player } from './game/engine';
 import { QixEnemy } from './game/qix_enemy';
 import { SparxEnemy } from './game/sparx_enemy';
 import { PowerUp, PowerUpType, FreezeQixPowerUp, PlayerSpeedBoostPowerUp, GameTargets } from './game/powerup';
+import { playSound, preloadAllGameSounds } from './sound/sound';
 
 // LocalStorage Keys
 const STORAGE_KEY_HIGH_SCORE = 'qixCloneGame_highScore';
@@ -376,6 +377,7 @@ function showGameOverScreen() {
   // Ensure gameState reflects the final values for the game just ended
   saveHighScore(gameState.score);
   saveMaxArea(gameState.captured);
+  playSound('gameOver');
 
   if (gameOverOverlay && finalScoreEl && finalAreaEl && canvas ) {
     finalScoreEl.textContent = gameState.score.toString();
@@ -584,7 +586,9 @@ function animate() {
         gameState: gameState,
         scene: scene
       };
+      playSound('powerupCollect');
       powerUp.collect(scene, gameTargets);
+      playSound('powerupActivate');
       activePowerUpEffects.push(powerUp);
       powerUpsOnBoard.splice(i, 1); // Remove from on-board list
       break; // Collect one per frame
@@ -623,6 +627,7 @@ function animate() {
         if (distance < collisionThreshold) {
           console.log("Player hit by Sparx on boundary!");
           gameState.lives--;
+          playSound('playerDeath');
 
           if (gameState.lives > 0) {
             player.position.set(-gridLimit, -gridLimit, 0); // Reposition to bottom-left corner
@@ -650,6 +655,7 @@ function animate() {
       fuseActiveOnTrail = false; // Reset fuse active flag for this trail
       clearTrail(scene); // Clear any previous partial trail
       initTrail(scene);  // Start a new trail
+      playSound('drawStart');
       console.log('Drawing started from boundary.');
     } else {
       console.log('Cannot start drawing from open space for capture. Must be on a boundary.');
@@ -719,6 +725,7 @@ function animate() {
             scene.add(capturedMesh);
             capturedAreaDataList.push({ mesh: capturedMesh, shape: shape }); // Store mesh and shape
 
+            playSound('areaCapture');
             // Deactivate Fuse if active upon successful capture
             if (fuseActiveOnTrail) {
               for (const sparx_fuse_check of sparxEnemies) { // Renamed sparx to avoid conflict
@@ -789,6 +796,7 @@ function animate() {
             if (segmentsIntersect(trailSegP1, trailSegP2, qixSeg.p1, qixSeg.p2)) {
               console.log("Player trail hit Qix!");
               gameState.lives--;
+              playSound('playerDeath');
               isDrawing = false;
               fuseActiveOnTrail = false; // Reset fuse active flag
               clearTrail(scene);
@@ -827,6 +835,7 @@ function animate() {
           if (distance < FUSE_COLLISION_THRESHOLD) {
             console.log("Player caught by Fuse!");
             gameState.lives--;
+            playSound('playerDeath');
             isDrawing = false;
             fuseActiveOnTrail = false;
             clearTrail(scene);
@@ -865,6 +874,7 @@ function animate() {
         if (segmentsIntersect(headP1, headP2, tailP1, tailP2)) {
           console.log("Trail crossed itself!");
           gameState.lives--;
+          playSound('playerDeath');
           isDrawing = false; // Stop drawing
           fuseActiveOnTrail = false; // Reset fuse active flag
           clearTrail(scene);  // Clear the offending trail
@@ -997,9 +1007,23 @@ window.onload = () => {
   maxAreaDisplayEl = document.getElementById('max-area-display');
   // 'canvas' is already assigned earlier in window.onload
 
+  // Preload sounds
+  preloadAllGameSounds()
+    .then((results) => {
+      console.log("Sound preload process completed.");
+      results.forEach(result => {
+        if (result.status === 'rejected') {
+          console.error("A sound failed to preload:", result.reason);
+        }
+      });
+    });
+
   // Add event listener for restart button
   if (restartButton) {
-    restartButton.addEventListener('click', restartGame);
+    restartButton.addEventListener('click', () => {
+      playSound('buttonClick');
+      restartGame();
+    });
   } else {
     console.error("Restart button not found!");
   }
