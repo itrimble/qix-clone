@@ -1,78 +1,85 @@
 import * as THREE from 'three';
 import { createTrailMaterial } from './materials';
 
-// Trail state
-let trailPoints: THREE.Vector3[] = [];
+const MAX_TRAIL_POINTS = 500;
+
+// Module-scoped variables for the trail state
+let trailPoints: THREE.Vector3[] = []; // Stores the Vector3 points for easy access/copying
 let trailLine: THREE.Line | null = null;
 let trailMaterial: THREE.LineBasicMaterial;
+let currentTrailLength = 0; // Number of points currently in the trail
+let positionBuffer: Float32Array | null = null; // The actual buffer for THREE.js
 
-/**
- * Initializes the player's trail system.
- */
 export function initTrail(scene: THREE.Scene): void {
-  // Clear any existing points
   trailPoints = [];
-  
-  // Get trail material
+  currentTrailLength = 0;
   trailMaterial = createTrailMaterial();
-  
-  // Create empty geometry for the trail
+
   const geometry = new THREE.BufferGeometry();
-  
-  // Create an empty buffer attribute
-  const positions = new Float32Array(0);
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  
-  // Create the line and add it to the scene
+  positionBuffer = new Float32Array(MAX_TRAIL_POINTS * 3); // x, y, z for each point
+
+  geometry.setAttribute('position', new THREE.BufferAttribute(positionBuffer, 3));
+  geometry.setDrawRange(0, 0); // Initially draw nothing
+
   trailLine = new THREE.Line(geometry, trailMaterial);
   scene.add(trailLine);
-  
-  console.log('Trail initialized');
+
+  console.log('Trail initialized with pre-allocated buffer.');
 }
 
-/**
- * Updates the trail with a new point.
- */
 export function updateTrail(scene: THREE.Scene, newPoint: THREE.Vector3): void {
-  // Add the new point to our points array
-  trailPoints.push(newPoint.clone());
-  
-  // Limit trail length to prevent performance issues
-  if (trailPoints.length > 500) {
-    trailPoints.shift(); // Remove oldest point
+  if (!trailLine || !positionBuffer) {
+    console.warn('Trail not initialized, cannot update.');
+    return;
   }
-  
-  // Create a new array for the updated positions
-  const positions = new Float32Array(trailPoints.length * 3);
-  
-  // Fill the positions array with our points
-  for (let i = 0; i < trailPoints.length; i++) {
-    positions[i * 3] = trailPoints[i].x;
-    positions[i * 3 + 1] = trailPoints[i].y;
-    positions[i * 3 + 2] = trailPoints[i].z;
+
+  if (currentTrailLength < MAX_TRAIL_POINTS) {
+    trailPoints.push(newPoint.clone());
+
+    positionBuffer[currentTrailLength * 3] = newPoint.x;
+    positionBuffer[currentTrailLength * 3 + 1] = newPoint.y;
+    positionBuffer[currentTrailLength * 3 + 2] = newPoint.z;
+    currentTrailLength++;
+  } else {
+    trailPoints.shift();
+    trailPoints.push(newPoint.clone());
+
+    for (let i = 0; i < MAX_TRAIL_POINTS; i++) {
+      positionBuffer[i * 3] = trailPoints[i].x;
+      positionBuffer[i * 3 + 1] = trailPoints[i].y;
+      positionBuffer[i * 3 + 2] = trailPoints[i].z;
+    }
   }
-  
-  // Update the line geometry
-  trailLine.geometry.dispose(); // Clean up old geometry
-  trailLine.geometry = new THREE.BufferGeometry();
-  trailLine.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  trailLine.geometry.attributes.position.needsUpdate = true;
+  trailLine.geometry.setDrawRange(0, currentTrailLength);
 }
 
-/**
- * Clears the trail from the scene.
- */
-export function clearTrail(scene: THREE.Scene): void {
+export function clearTrailPoints(): void {
+  trailPoints = [];
+  currentTrailLength = 0;
+  if (trailLine) {
+    trailLine.geometry.setDrawRange(0, 0);
+  }
+   console.log('Trail points cleared, draw range set to 0.');
+}
+
+export function destroyTrail(scene: THREE.Scene): void {
   if (trailLine) {
     scene.remove(trailLine);
     trailLine.geometry.dispose();
     trailLine = null;
   }
   trailPoints = [];
+  currentTrailLength = 0;
+  positionBuffer = null;
+  console.log('Trail destroyed and removed from scene.');
 }
 
-/**
- * Returns a copy of the current trail points.
- */
 export function getTrailPoints(): THREE.Vector3[] {
-  return trailPoints.map(p => p.clone());
+  return trailPoints.slice(0, currentTrailLength).map(p => p.clone());
+}
+
+export function clearTrail(scene: THREE.Scene): void {
+  destroyTrail(scene);
 }

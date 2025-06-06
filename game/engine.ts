@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { createStarfield, createNebulaGradient } from './backgrounds';
 import { keys } from '../ui/controls';
 
-const BASE_PLAYER_SPEED = 0.25;
+export const BASE_PLAYER_SPEED = 0.25;
+export const gridLimit = 14; // Slightly less than grid size/2
 
 // Global variables
 export let player: THREE.Mesh;
@@ -104,7 +105,6 @@ export function updateScene(scene: THREE.Scene, speedMultiplier: number): void {
   player.rotation.y += 0.01;
   
   // Limit player movement to the grid
-  const gridLimit = 14; // Slightly less than grid size/2
   player.position.x = Math.max(-gridLimit, Math.min(gridLimit, player.position.x));
   player.position.y = Math.max(-gridLimit, Math.min(gridLimit, player.position.y));
 }

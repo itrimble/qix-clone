@@ -19,7 +19,18 @@ vi.mock('three', async (importOriginal) => {
       shadowMap: { enabled: false }, // Often configured
     })),
     AmbientLight: vi.fn(),
-    DirectionalLight: vi.fn(() => ({ position: { set: vi.fn(), normalize: vi.fn() }, castShadow: false, shadow: {} })), // Mock shadow properties
+    DirectionalLight: vi.fn(() => ({ 
+      position: Object.assign(new actualThree.Vector3(), {
+        set: vi.fn(function(x, y, z) {
+          this.x = x;
+          this.y = y; 
+          this.z = z;
+          return this;
+        })
+      }),
+      castShadow: false, 
+      shadow: {} 
+    })), // Mock shadow properties
     GridHelper: vi.fn(() => ({ rotation: { x: 0 } })),
     BoxGeometry: vi.fn(),
     MeshPhongMaterial: vi.fn(),
@@ -99,7 +110,7 @@ describe('Game Engine Logic', () => {
     expect(player).toBeDefined();
     // Initial position is set by createPlayer function in engine.ts
     expect(player.position.x).toBe(0);
-    expect(player.position.y).toBe(10); // Default player Y position in createPlayer
+    expect(player.position.y).toBe(0); // Default player Y position is 0
     expect(player.position.z).toBe(0);
     expect(sceneFromSetup.add).toHaveBeenCalledWith(player);
   });

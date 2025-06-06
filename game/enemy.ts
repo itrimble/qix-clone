@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { player } from './engine'; // To access player's position for AI
 
-import { enemyMaterial, edgeMaterial } from '../materials'; // Import default enemy material and edgeMaterial
+import { enemyMaterial, edgeMaterial } from './materials'; // Import default enemy material and edgeMaterial
 
 // Shared geometry for all instances of standard Enemy
 const sharedEnemyGeometry = new THREE.BoxGeometry(1, 1, 1);

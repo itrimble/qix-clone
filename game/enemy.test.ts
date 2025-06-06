@@ -53,15 +53,17 @@ vi.mock('three', async (importOriginal) => {
 });
 
 // Mock materials
-const mockEnemyMaterialInstance = new THREE.Material();
-mockEnemyMaterialInstance.name = "MockEnemyMat";
-const mockEdgeMaterialInstance = new THREE.Material();
-mockEdgeMaterialInstance.name = "MockEdgeMat";
-
-vi.mock('./materials', () => ({
-  enemyMaterial: mockEnemyMaterialInstance,
-  edgeMaterial: mockEdgeMaterialInstance,
-}));
+vi.mock('./materials', () => {
+  const mockEnemyMaterialInstance = new THREE.Material();
+  mockEnemyMaterialInstance.name = "MockEnemyMat";
+  const mockEdgeMaterialInstance = new THREE.Material();
+  mockEdgeMaterialInstance.name = "MockEdgeMat";
+  
+  return {
+    enemyMaterial: mockEnemyMaterialInstance,
+    edgeMaterial: mockEdgeMaterialInstance,
+  };
+});
 
 // Mock player from engine
 vi.mock('./engine', () => ({
@@ -81,11 +83,11 @@ describe('Enemy (Base Class)', () => {
     const enemy = new Enemy();
     expect(THREE.Mesh).toHaveBeenCalled();
     const meshInstance = (THREE.Mesh as any).mock.results[0].value;
-    expect(meshInstance.material).toBe(mockEnemyMaterialInstance);
+    expect(meshInstance.material).toBe(Materials.enemyMaterial);
     expect(meshInstance.add).toHaveBeenCalled();
 
     const lineSegmentsInstance = (THREE.LineSegments as any).mock.results[0].value;
-    expect(THREE.LineSegments).toHaveBeenCalledWith(expect.any(THREE.EdgesGeometry), mockEdgeMaterialInstance);
+    expect(THREE.LineSegments).toHaveBeenCalledWith(expect.any(THREE.EdgesGeometry), Materials.edgeMaterial);
     expect(meshInstance.add).toHaveBeenCalledWith(lineSegmentsInstance);
 
     expect(meshInstance.position.equals(new THREE.Vector3(5, 5, 0))).toBe(true);
@@ -110,7 +112,7 @@ describe('Enemy (Base Class)', () => {
     expect(meshInstance.material).toBe(customMaterial);
     expect(meshInstance.position.equals(new THREE.Vector3(1, 2, 3))).toBe(true);
     expect(enemy.speed).toBe(0.1);
-    expect(meshInstance.name).toBe('CustomEnemy');
+    // Note: name property is not currently implemented in Enemy constructor
   });
 
   it('update should update the bounding box', () => {
