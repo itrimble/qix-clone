@@ -159,8 +159,10 @@ describe('Game Engine Logic', () => {
     keys['arrowup'] = false;
 
     player.position.set(0, gridLimit - 0.1, 0); // Start just inside boundary
+    keys['arrowup'] = true; // Need to press key to test movement
     updateScene(sceneFromSetup, 1); // Move up
     expect(player.position.y).toBe(gridLimit); // Should be clamped
+    keys['arrowup'] = false;
   });
 
   it('should constrain player movement within grid limits (bottom)', () => {
@@ -171,8 +173,10 @@ describe('Game Engine Logic', () => {
     keys['arrowdown'] = false;
 
     player.position.set(0, -gridLimit + 0.1, 0);
+    keys['arrowdown'] = true; // Need to press key to test movement
     updateScene(sceneFromSetup, 1);
     expect(player.position.y).toBe(-gridLimit);
+    keys['arrowdown'] = false;
   });
 
   it('should constrain player movement within grid limits (left)', () => {
@@ -183,8 +187,10 @@ describe('Game Engine Logic', () => {
     keys['arrowleft'] = false;
 
     player.position.set(-gridLimit + 0.1, 0, 0);
+    keys['arrowleft'] = true; // Need to press key to test movement
     updateScene(sceneFromSetup, 1);
     expect(player.position.x).toBe(-gridLimit);
+    keys['arrowleft'] = false;
   });
 
   it('should constrain player movement within grid limits (right)', () => {
@@ -195,8 +201,10 @@ describe('Game Engine Logic', () => {
     keys['arrowright'] = false;
 
     player.position.set(gridLimit - 0.1, 0, 0);
+    keys['arrowright'] = true; // Need to press key to test movement
     updateScene(sceneFromSetup, 1);
     expect(player.position.x).toBe(gridLimit);
+    keys['arrowright'] = false;
   });
 
 });
