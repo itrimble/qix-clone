@@ -145,6 +145,22 @@ function restartGame() {
 }
 // --- End Game Restart Function ---
 
+/**
+ * Updates the Qix enemy's confinement area when the player captures a region.
+ *
+ * Algorithm:
+ * 1. Calculate the bounding box of the captured shape
+ * 2. Check if the capture "slices" off one side of the current confinement:
+ *    - LEFT slice: captured area spans full height and touches left edge
+ *    - RIGHT slice: captured area spans full height and touches right edge
+ *    - BOTTOM slice: captured area spans full width and touches bottom edge
+ *    - TOP slice: captured area spans full width and touches top edge
+ * 3. If a slice is detected, shrink the confinement rectangle accordingly
+ * 4. Push the Qix position inside the new confinement if it's outside
+ * 5. Reverse Qix velocity if it was moving toward the new boundary
+ *
+ * @param capturedShape - The THREE.Shape representing the newly captured area
+ */
 function updateQixConfinementOnCapture(capturedShape: THREE.Shape) {
   if (!qix) return;
 

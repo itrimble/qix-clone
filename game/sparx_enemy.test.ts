@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as THREE from 'three';
-import { SparxEnemy, SPARX_COLOR, FUSE_COLOR, SPARX_SIZE, SPARX_SPEED, FUSE_SPEED_MULTIPLIER } from './sparx_enemy';
+import { SparxEnemy } from './sparx_enemy';
+import { SPARX_COLOR, FUSE_COLOR, SPARX_SIZE, SPARX_SPEED, FUSE_SPEED_MULTIPLIER } from './config';
 
 const testGridLimit = 14;
 const testCorners = [
@@ -126,11 +127,11 @@ describe('SparxEnemy', () => {
       sparx.activateFuseMode(trail);
 
       expect(sparx.isFuse).toBe(true);
-      expect(sparx.currentTrailPoints).toEqual(trail);
+      expect(sparx.trailPoints).toEqual(trail);
       expect(sparx.position.equals(trail[0])).toBe(true);
       expect(sparx.mesh.position.x).toBe(trail[0].x);
       expect(sparx.mesh.position.y).toBe(trail[0].y);
-      expect(sparx.currentTargetTrailPointIndex).toBe(1);
+      expect(sparx.trailPointIndex).toBe(1);
       expect((sparx.mesh.material as THREE.MeshBasicMaterial).color.getHex()).toBe(FUSE_COLOR);
     });
 
@@ -145,7 +146,7 @@ describe('SparxEnemy', () => {
         const trail = [new THREE.Vector2(1,1)];
         sparx.activateFuseMode(trail);
         expect(sparx.isFuse).toBe(true);
-        expect(sparx.currentTargetTrailPointIndex).toBe(0); // Stays at the only point
+        expect(sparx.trailPointIndex).toBe(0); // Stays at the only point
     });
 
     it('update in Fuse Mode should move towards next trail point', () => {
@@ -156,7 +157,7 @@ describe('SparxEnemy', () => {
 
       expect(sparx.position.x).toBeCloseTo(fuseMoveAmount);
       expect(sparx.position.y).toBeCloseTo(0);
-      expect(sparx.currentTargetTrailPointIndex).toBe(1); // Still targeting (10,0)
+      expect(sparx.trailPointIndex).toBe(1); // Still targeting (10,0)
     });
 
     it('update in Fuse Mode should snap to point and increment target', () => {
@@ -172,14 +173,14 @@ describe('SparxEnemy', () => {
       sparx.update(0.016); // Moves approx 0.06. Initial point (0,0), target (0.1,0)
       // Since 0.06 < 0.1, it does not reach yet.
       expect(sparx.position.x).toBeCloseTo(actualFuseMoveAmount);
-      expect(sparx.currentTargetTrailPointIndex).toBe(1);
+      expect(sparx.trailPointIndex).toBe(1);
 
       // Need more steps or longer deltaTime to reach (0.1,0)
       sparx.position.set(0.09,0,0); // Manually set closer
       sparx.update(0.016); // Should now pass 0.1 and snap
 
       expect(sparx.position.equals(trail[1])).toBe(true); // Snapped to (0.1,0)
-      expect(sparx.currentTargetTrailPointIndex).toBe(2); // Now targets (0.2,0.2)
+      expect(sparx.trailPointIndex).toBe(2); // Now targets (0.2,0.2)
     });
 
     it('update in Fuse Mode should stay at last point if end of trail is reached', () => {
@@ -188,7 +189,7 @@ describe('SparxEnemy', () => {
 
       sparx.update(0.016); // Should reach/pass (0.05,0) and snap
       expect(sparx.position.equals(trail[1])).toBe(true);
-      expect(sparx.currentTargetTrailPointIndex).toBe(1); // Stays targeting the last point's index
+      expect(sparx.trailPointIndex).toBe(1); // Stays targeting the last point's index
 
       sparx.update(0.016); // Another update
       expect(sparx.position.equals(trail[1])).toBe(true); // Should not move

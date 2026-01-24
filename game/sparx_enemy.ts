@@ -10,11 +10,11 @@ import {
 export class SparxEnemy {
   public mesh: THREE.Mesh;
   public position: THREE.Vector2; // Current position
-  private currentSegment: number; // 0: bottom, 1: right, 2: top, 3: left
-  private direction: number; // 1 for positive (e.g., left to right, bottom to top), -1 for negative
-  private speed: number;
-  private gridLimit: number;
-  private corners: THREE.Vector2[]; // [BL, BR, TR, TL]
+  private _currentSegment: number; // 0: bottom, 1: right, 2: top, 3: left
+  private _direction: number; // 1 for positive (e.g., left to right, bottom to top), -1 for negative
+  private _speed: number;
+  private _gridLimit: number;
+  private _corners: THREE.Vector2[]; // [BL, BR, TR, TL]
 
   public isFuse: boolean = false;
   private currentTargetTrailPointIndex: number = 0;
@@ -23,6 +23,15 @@ export class SparxEnemy {
   private originalColor: THREE.Color = new THREE.Color(SPARX_COLOR);
   private fuseColorVal: THREE.Color = new THREE.Color(FUSE_COLOR);
 
+  // Getters for testing
+  get currentSegment() { return this._currentSegment; }
+  get direction() { return this._direction; }
+  get speed() { return this._speed; }
+  get gridLimit() { return this._gridLimit; }
+  get corners() { return this._corners; }
+  get trailPoints() { return this.currentTrailPoints; }
+  get trailPointIndex() { return this.currentTargetTrailPointIndex; }
+
   constructor(
     initialSegment: number,
     initialPosition: THREE.Vector2, // Should be on the initialSegment
@@ -30,13 +39,13 @@ export class SparxEnemy {
     gridLimitValue: number,
     boundaryCorners: THREE.Vector2[] // Pass BL, BR, TR, TL
   ) {
-    this.currentSegment = initialSegment;
+    this._currentSegment = initialSegment;
     this.position = initialPosition.clone();
-    this.direction = initialDirection;
-    this.speed = SPARX_SPEED;
-    this.fuseSpeed = this.speed * FUSE_SPEED_MULTIPLIER;
-    this.gridLimit = gridLimitValue;
-    this.corners = boundaryCorners; // Store [BL, BR, TR, TL]
+    this._direction = initialDirection;
+    this._speed = SPARX_SPEED;
+    this.fuseSpeed = this._speed * FUSE_SPEED_MULTIPLIER;
+    this._gridLimit = gridLimitValue;
+    this._corners = boundaryCorners; // Store [BL, BR, TR, TL]
 
     // Initialize originalColor based on the material's color
     const geometry = new THREE.BoxGeometry(SPARX_SIZE, SPARX_SIZE, SPARX_SIZE);
@@ -69,15 +78,15 @@ export class SparxEnemy {
     let closestCorner: THREE.Vector2 | null = null;
     let minDistSq = Infinity;
 
-    if (!this.corners || this.corners.length !== 4) {
+    if (!this._corners || this._corners.length !== 4) {
         console.error("Sparx: Boundary corners not defined for snapping!");
-        this.position.set(-this.gridLimit, -this.gridLimit);
-        this.currentSegment = 0; this.direction = 1;
+        this.position.set(-this._gridLimit, -this._gridLimit);
+        this._currentSegment = 0; this._direction = 1;
         this.mesh.position.set(this.position.x, this.position.y, 0);
         return;
     }
 
-    for (const corner of this.corners) {
+    for (const corner of this._corners) {
       const distSq = this.position.distanceToSquared(corner);
       if (distSq < minDistSq) {
         minDistSq = distSq;
@@ -87,21 +96,21 @@ export class SparxEnemy {
 
     if (closestCorner) {
       this.position.copy(closestCorner);
-      if (closestCorner.equals(this.corners[0])) { // BL
-        this.currentSegment = 0; this.direction = 1;
-      } else if (closestCorner.equals(this.corners[1])) { // BR
-        this.currentSegment = 1; this.direction = 1;
-      } else if (closestCorner.equals(this.corners[2])) { // TR
-        this.currentSegment = 2; this.direction = -1;
-      } else if (closestCorner.equals(this.corners[3])) { // TL
-        this.currentSegment = 3; this.direction = -1;
+      if (closestCorner.equals(this._corners[0])) { // BL
+        this._currentSegment = 0; this._direction = 1;
+      } else if (closestCorner.equals(this._corners[1])) { // BR
+        this._currentSegment = 1; this._direction = 1;
+      } else if (closestCorner.equals(this._corners[2])) { // TR
+        this._currentSegment = 2; this._direction = -1;
+      } else if (closestCorner.equals(this._corners[3])) { // TL
+        this._currentSegment = 3; this._direction = -1;
       }
     } else {
-        this.position.set(-this.gridLimit, -this.gridLimit);
-        this.currentSegment = 0; this.direction = 1;
+        this.position.set(-this._gridLimit, -this._gridLimit);
+        this._currentSegment = 0; this._direction = 1;
     }
     this.mesh.position.set(this.position.x, this.position.y, 0);
-    console.log(`Sparx snapped to segment ${this.currentSegment} after fuse mode.`);
+    console.log(`Sparx snapped to segment ${this._currentSegment} after fuse mode.`);
   }
 
   public deactivateFuseMode(): void {
@@ -143,52 +152,52 @@ export class SparxEnemy {
       }
       this.mesh.position.set(this.position.x, this.position.y, 0);
     } else { // Normal boundary patrolling
-      const moveDistance = this.speed * deltaTime * 50;
-      switch (this.currentSegment) {
+      const moveDistance = this._speed * deltaTime * 50;
+      switch (this._currentSegment) {
         case 0: // Bottom wall (moving along x-axis)
-          this.position.x += this.direction * moveDistance;
-          if (this.direction === 1 && this.position.x >= this.corners[1].x) { // Reached BR corner
-            this.position.x = this.corners[1].x;
-            this.currentSegment = 1;
-          } else if (this.direction === -1 && this.position.x <= this.corners[0].x) { // Reached BL corner
-            this.position.x = this.corners[0].x;
-            this.currentSegment = 3;
-            this.direction = -1;
+          this.position.x += this._direction * moveDistance;
+          if (this._direction === 1 && this.position.x >= this._corners[1].x) { // Reached BR corner
+            this.position.x = this._corners[1].x;
+            this._currentSegment = 1;
+          } else if (this._direction === -1 && this.position.x <= this._corners[0].x) { // Reached BL corner
+            this.position.x = this._corners[0].x;
+            this._currentSegment = 3;
+            this._direction = -1;
           }
           break;
         case 1: // Right wall (moving along y-axis)
-          this.position.y += this.direction * moveDistance;
-          if (this.direction === 1 && this.position.y >= this.corners[2].y) { // Reached TR corner
-            this.position.y = this.corners[2].y;
-            this.currentSegment = 2;
-            this.direction = -1;
-          } else if (this.direction === -1 && this.position.y <= this.corners[1].y) { // Reached BR corner
-            this.position.y = this.corners[1].y;
-            this.currentSegment = 0;
-            this.direction = -1;
+          this.position.y += this._direction * moveDistance;
+          if (this._direction === 1 && this.position.y >= this._corners[2].y) { // Reached TR corner
+            this.position.y = this._corners[2].y;
+            this._currentSegment = 2;
+            this._direction = -1;
+          } else if (this._direction === -1 && this.position.y <= this._corners[1].y) { // Reached BR corner
+            this.position.y = this._corners[1].y;
+            this._currentSegment = 0;
+            this._direction = -1;
           }
           break;
         case 2: // Top wall (moving along x-axis)
-          this.position.x += this.direction * moveDistance;
-          if (this.direction === -1 && this.position.x <= this.corners[3].x) { // Reached TL corner
-            this.position.x = this.corners[3].x;
-            this.currentSegment = 3;
-          } else if (this.direction === 1 && this.position.x >= this.corners[2].x) { // Reached TR corner
-            this.position.x = this.corners[2].x;
-            this.currentSegment = 1;
-            this.direction = 1;
+          this.position.x += this._direction * moveDistance;
+          if (this._direction === -1 && this.position.x <= this._corners[3].x) { // Reached TL corner
+            this.position.x = this._corners[3].x;
+            this._currentSegment = 3;
+          } else if (this._direction === 1 && this.position.x >= this._corners[2].x) { // Reached TR corner
+            this.position.x = this._corners[2].x;
+            this._currentSegment = 1;
+            this._direction = 1;
           }
           break;
         case 3: // Left wall (moving along y-axis)
-          this.position.y += this.direction * moveDistance;
-          if (this.direction === -1 && this.position.y <= this.corners[0].y) { // Reached BL corner
-            this.position.y = this.corners[0].y;
-            this.currentSegment = 0;
-            this.direction = 1;
-          } else if (this.direction === 1 && this.position.y >= this.corners[3].y) { // Reached TL corner
-            this.position.y = this.corners[3].y;
-            this.currentSegment = 2;
-            this.direction = 1;
+          this.position.y += this._direction * moveDistance;
+          if (this._direction === -1 && this.position.y <= this._corners[0].y) { // Reached BL corner
+            this.position.y = this._corners[0].y;
+            this._currentSegment = 0;
+            this._direction = 1;
+          } else if (this._direction === 1 && this.position.y >= this._corners[3].y) { // Reached TL corner
+            this.position.y = this._corners[3].y;
+            this._currentSegment = 2;
+            this._direction = 1;
           }
           break;
       }
@@ -198,9 +207,9 @@ export class SparxEnemy {
 
   public reset(initialSegment: number, initialPosition: THREE.Vector2, initialDirection: number): void {
     this.deactivateFuseMode(); // Ensure fuse mode is off before resetting patrol
-    this.currentSegment = initialSegment;
+    this._currentSegment = initialSegment;
     this.position.copy(initialPosition);
-    this.direction = initialDirection;
+    this._direction = initialDirection;
     this.mesh.position.set(this.position.x, this.position.y, 0);
     console.log("Sparx Reset to segment:", initialSegment);
   }

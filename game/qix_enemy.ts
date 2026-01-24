@@ -9,16 +9,22 @@ import {
 
 export class QixEnemy {
   public mesh: THREE.Line;
-  private points: THREE.Vector2[] = [];
+  private _points: THREE.Vector2[] = [];
   public position: THREE.Vector2; // Center position (public for confinement adjustments)
   public velocity: THREE.Vector2; // Public for velocity adjustments after confinement change
-  private confinement: { minX: number, maxX: number, minY: number, maxY: number };
-  private time: number = 0; // For animation
+  private _confinement: { minX: number, maxX: number, minY: number, maxY: number };
+  private _time: number = 0; // For animation
   public isFrozen: boolean = false;
+
+  // Getters for testing and debugging
+  get confinement() { return this._confinement; }
+  get points() { return this._points; }
+  get time() { return this._time; }
+  set time(value: number) { this._time = value; }
 
   constructor(initialPosition: THREE.Vector2, confinementRect: { minX: number, maxX: number, minY: number, maxY: number }) {
     this.position = initialPosition;
-    this.confinement = confinementRect;
+    this._confinement = confinementRect;
 
     // Initial random velocity
     const angle = Math.random() * Math.PI * 2;
@@ -26,7 +32,7 @@ export class QixEnemy {
 
     // Initialize points for the line relative to position (e.g., a horizontal line initially)
     for (let i = 0; i < NUM_SEGMENTS; i++) {
-      this.points.push(new THREE.Vector2((i - Math.floor(NUM_SEGMENTS / 2)) * SEGMENT_LENGTH, 0));
+      this._points.push(new THREE.Vector2((i - Math.floor(NUM_SEGMENTS / 2)) * SEGMENT_LENGTH, 0));
     }
 
     const material = new THREE.LineBasicMaterial({ color: QIX_COLOR });
@@ -38,10 +44,10 @@ export class QixEnemy {
 
   public updateLineGeometry(): void {
      const currentAbsolutePoints: THREE.Vector3[] = [];
-     this.points.forEach((p, index) => {
+     this._points.forEach((p, index) => {
          // Simple undulation for body animation
-         const offsetX = Math.sin(this.time + index * 0.5) * SEGMENT_LENGTH * 0.3;
-         const offsetY = Math.cos(this.time + index * 0.7) * SEGMENT_LENGTH * 0.3;
+         const offsetX = Math.sin(this._time + index * 0.5) * SEGMENT_LENGTH * 0.3;
+         const offsetY = Math.cos(this._time + index * 0.7) * SEGMENT_LENGTH * 0.3;
 
          currentAbsolutePoints.push(new THREE.Vector3(
              this.position.x + p.x + offsetX,
@@ -57,7 +63,7 @@ export class QixEnemy {
     if (this.isFrozen) {
       return; // Completely skip update if frozen
     }
-    this.time += ANIMATION_SPEED * deltaTime * 50; // deltaTime can be small, scale it
+    this._time += ANIMATION_SPEED * deltaTime * 50; // deltaTime can be small, scale it
 
     const oldPosition = this.position.clone();
 
@@ -69,7 +75,9 @@ export class QixEnemy {
     if (capturedShapes && capturedShapes.length > 0) {
       const currentPositionVec2 = new THREE.Vector2(this.position.x, this.position.y);
       for (const shape of capturedShapes) {
-        if (shape.containsPoint(currentPositionVec2)) {
+        // THREE.Shape has containsPoint but it's not in TS definitions - cast to access it
+        const shapeWithContains = shape as THREE.Shape & { containsPoint(point: THREE.Vector2): boolean };
+        if (shapeWithContains.containsPoint(currentPositionVec2)) {
           this.position.copy(oldPosition);
           this.velocity.x *= -1;
           this.velocity.y *= -1;
@@ -117,20 +125,19 @@ export class QixEnemy {
 
   public reset(initialPosition: THREE.Vector2, confinementRect: { minX: number, maxX: number, minY: number, maxY: number }): void {
     this.position.copy(initialPosition);
-    this.confinement = confinementRect; // In case it changes, though unlikely for now
+    this._confinement = confinementRect;
 
     const angle = Math.random() * Math.PI * 2;
     this.velocity.set(Math.cos(angle) * QIX_SPEED, Math.sin(angle) * QIX_SPEED); // QIX_SPEED is a const in this file
 
     this.isFrozen = false;
-    this.time = 0; // Reset animation time
+    this._time = 0; // Reset animation time
     this.updateLineGeometry();
     console.log("Qix Reset.");
   }
 
   public setConfinement(newConfinement: { minX: number, maxX: number, minY: number, maxY: number }): void {
-    this.confinement = { ...newConfinement };
-    console.log("QixEnemy internal confinement updated to:", this.confinement);
+    this._confinement = { ...newConfinement };
 
     const preClampX = this.position.x;
     const preClampY = this.position.y;

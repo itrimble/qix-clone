@@ -1,21 +1,57 @@
 import * as THREE from 'three';
 
-// --- Intersection Detection Utilities ---
+/**
+ * Geometry utilities for Qix game mechanics including:
+ * - Line segment intersection detection
+ * - Boundary path traversal
+ * - Polygon calculation for captured areas
+ */
 
-// Helper function to find orientation of ordered triplet (p, q, r).
-// Returns 0 if p, q, r are collinear, 1 if clockwise, 2 if counterclockwise.
+// =============================================================================
+// INTERSECTION DETECTION
+// =============================================================================
+
+/**
+ * Calculates the orientation of an ordered triplet of points.
+ * Uses the cross product formula: (q-p) × (r-q)
+ *
+ * @param p - First point
+ * @param q - Second point (pivot)
+ * @param r - Third point
+ * @returns 0 if collinear, 1 if clockwise, 2 if counterclockwise
+ */
 export function getOrientation(p: THREE.Vector2, q: THREE.Vector2, r: THREE.Vector2): number {
   const val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
   if (val === 0) return 0; // Collinear
   return (val > 0) ? 1 : 2; // Clockwise or Counterclockwise
 }
 
-// Helper function to check if point q lies on segment pr.
+/**
+ * Checks if point q lies on segment pr (assuming collinearity).
+ * Used as a helper for collinear segment overlap detection.
+ */
 export function onSegment(p: THREE.Vector2, q: THREE.Vector2, r: THREE.Vector2): boolean {
   return (q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) &&
           q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y));
 }
 
+/**
+ * Detects if two line segments intersect.
+ * Uses orientation-based algorithm with special handling for:
+ * - Endpoint-only touching (returns false for Qix game rules)
+ * - Collinear overlapping segments
+ *
+ * Algorithm:
+ * 1. Calculate orientations of 4 triplet combinations
+ * 2. General case: segments cross if orientations differ appropriately
+ * 3. Special case: check collinear segments for overlap
+ *
+ * @param p1 - First endpoint of segment 1
+ * @param q1 - Second endpoint of segment 1
+ * @param p2 - First endpoint of segment 2
+ * @param q2 - Second endpoint of segment 2
+ * @returns true if segments intersect (not just touch at endpoints)
+ */
 export function segmentsIntersect(p1: THREE.Vector2, q1: THREE.Vector2, p2: THREE.Vector2, q2: THREE.Vector2): boolean {
   const o1 = getOrientation(p1, q1, p2);
   const o2 = getOrientation(p1, q1, q2);
@@ -89,6 +125,29 @@ export function getSegmentForPoint(point: THREE.Vector2, gl: number): number {
   return -1;
 }
 
+/**
+ * Calculates the path along the game boundary between two points.
+ * Used to construct polygons for captured areas.
+ *
+ * The boundary is divided into 4 segments:
+ *   0: Bottom (y = -gridLimit)
+ *   1: Right  (x = +gridLimit)
+ *   2: Top    (y = +gridLimit)
+ *   3: Left   (x = -gridLimit)
+ *
+ * Algorithm:
+ * 1. Start at p1, determine which segment it's on
+ * 2. Traverse segments in CW or CCW direction
+ * 3. Add corner points as we cross segment boundaries
+ * 4. Stop when we reach the segment containing p2
+ * 5. Add p2 as final point
+ *
+ * @param p1 - Starting point (must be on boundary)
+ * @param p2 - Ending point (must be on boundary)
+ * @param isClockwise - Direction to traverse (true = CW, false = CCW)
+ * @param gl - Grid limit (boundary extends from -gl to +gl)
+ * @returns Array of points forming the boundary path
+ */
 export function getBoundaryPath(p1: THREE.Vector2, p2: THREE.Vector2, isClockwise: boolean, gl: number): THREE.Vector2[] {
   const orderedCorners = createOrderedCorners(gl);
   const path: THREE.Vector2[] = [p1.clone()];
@@ -144,6 +203,30 @@ export function getBoundaryPath(p1: THREE.Vector2, p2: THREE.Vector2, isClockwis
   return path;
 }
 
+/**
+ * Calculates two possible captured polygons when a player completes a trail.
+ *
+ * When a player draws a trail from one boundary point to another, it divides
+ * the playable area into two regions. This function computes both polygons.
+ *
+ * Algorithm:
+ * 1. Get the start and end points of the player's trail
+ * 2. Calculate the clockwise (CW) boundary path from end to start
+ * 3. Calculate the counter-clockwise (CCW) boundary path from end to start
+ * 4. Polygon 1 = trail + CW boundary path (smaller area, typically)
+ * 5. Polygon 2 = trail + CCW boundary path (larger area, typically)
+ * 6. Remove duplicate points if the polygon closes on itself
+ *
+ * The caller should choose the smaller polygon (without the Qix) for capture.
+ *
+ * Example: If player draws from bottom-left to bottom-right:
+ * - Polygon 1: trail + bottom edge (small rectangle)
+ * - Polygon 2: trail + rest of boundary (large remaining area)
+ *
+ * @param playerTrail - Array of Vector2 points forming the player's trail
+ * @param gl - Grid limit (boundary extends from -gl to +gl)
+ * @returns Two polygons representing the possible captured areas
+ */
 export function calculateQixPolygons(playerTrail: THREE.Vector2[], gl: number): { polygon1: THREE.Vector2[], polygon2: THREE.Vector2[] } {
   if (playerTrail.length < 2) {
     console.warn("calculateQixPolygons: Player trail too short.");

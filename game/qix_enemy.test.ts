@@ -130,8 +130,9 @@ describe('QixEnemy', () => {
     });
 
     it('should bounce off captured area', () => {
-      const capturedShape = new THREE.Shape(); // Dummy shape
-      vi.spyOn(capturedShape, 'containsPoint').mockReturnValue(true); // Qix will be "inside"
+      const capturedShape = new THREE.Shape();
+      // containsPoint exists on Shape but isn't in TS definitions
+      (capturedShape as unknown as { containsPoint: () => boolean }).containsPoint = vi.fn().mockReturnValue(true);
 
       qix.position.set(0,0); // Start at a point that will be 'contained'
       const originalVelocity = qix.velocity.clone();

@@ -1,55 +1,62 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as THREE from 'three';
-import { createScene, updateScene, player, BASE_PLAYER_SPEED, gridLimit } from './engine'; // player is the global mesh
-import { keys } from '../ui/controls'; // Import the actual keys
+import { createScene, updateScene, player, BASE_PLAYER_SPEED, gridLimit } from './engine';
+import { keys } from '../ui/controls';
 
-// Mock dependencies
+// Mock dependencies - use type assertions for test mocks
 vi.mock('three', async (importOriginal) => {
-  const actualThree = await importOriginal() as any; // Use any to avoid type issues with mock overriding
+  const actualThree = await importOriginal() as typeof THREE;
+
+  // Create a mock Mesh constructor that properly sets up instance properties
+  const MockMesh = vi.fn().mockImplementation(function(
+    this: Record<string, unknown>,
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material
+  ) {
+    this.geometry = geometry;
+    this.material = material;
+    this.position = new actualThree.Vector3(0, 0, 0);
+    this.rotation = new actualThree.Euler(0, 0, 0);
+    this.scale = new actualThree.Vector3(1, 1, 1);
+    this.castShadow = false;
+    this.receiveShadow = false;
+    this.add = vi.fn();
+    this.getWorldPosition = vi.fn().mockReturnValue(new actualThree.Vector3());
+    this.parent = null;
+    return this;
+  });
+
   return {
     ...actualThree,
-    Scene: vi.fn(() => ({ add: vi.fn(), background: null, children: [] })), // children needed for remove
+    Scene: vi.fn(() => ({ add: vi.fn(), background: null, children: [] })),
     PerspectiveCamera: vi.fn(() => ({ position: { set: vi.fn() }, lookAt: vi.fn() })),
     WebGLRenderer: vi.fn(() => ({
-      domElement: document.createElement('canvas'), // Provide a dummy domElement
+      domElement: document.createElement('canvas'),
       setSize: vi.fn(),
       setClearColor: vi.fn(),
       render: vi.fn(),
-      setPixelRatio: vi.fn(), // Often used
-      shadowMap: { enabled: false }, // Often configured
+      setPixelRatio: vi.fn(),
+      shadowMap: { enabled: false },
     })),
     AmbientLight: vi.fn(),
-    DirectionalLight: vi.fn(() => ({ 
+    DirectionalLight: vi.fn(() => ({
       position: Object.assign(new actualThree.Vector3(), {
-        set: vi.fn(function(x, y, z) {
+        set: vi.fn(function(this: THREE.Vector3, x: number, y: number, z: number) {
           this.x = x;
-          this.y = y; 
+          this.y = y;
           this.z = z;
           return this;
         })
       }),
-      castShadow: false, 
-      shadow: {} 
-    })), // Mock shadow properties
+      castShadow: false,
+      shadow: {}
+    })),
     GridHelper: vi.fn(() => ({ rotation: { x: 0 } })),
     BoxGeometry: vi.fn(),
     MeshPhongMaterial: vi.fn(),
-    Mesh: vi.fn().mockImplementation(function (geometry, material) { // Mock constructor
-      this.geometry = geometry;
-      this.material = material;
-      this.position = new THREE.Vector3(0,0,0); // Ensure position exists
-      this.rotation = new THREE.Euler(0,0,0);
-      this.scale = new THREE.Vector3(1,1,1);
-      this.castShadow = false;
-      this.receiveShadow = false;
-      this.add = vi.fn();
-      this.getWorldPosition = vi.fn().mockReturnValue(new THREE.Vector3());
-      this.parent = null; // Mock parent for cases where it might be accessed
-      // Add any other methods/properties accessed by the code under test
-      return this;
-    }),
-    Vector3: actualThree.Vector3, // Use actual Vector3 for position calculations
-    Euler: actualThree.Euler,   // Use actual Euler for rotation calculations
+    Mesh: MockMesh,
+    Vector3: actualThree.Vector3,
+    Euler: actualThree.Euler,
   };
 });
 
@@ -71,7 +78,7 @@ vi.mock('./backgrounds', () => ({
 
 describe('Game Engine Logic', () => {
   let mockCanvas: HTMLCanvasElement;
-  let sceneFromSetup: any; // Use 'any' for mocked THREE.Scene
+  let sceneFromSetup: THREE.Scene;
 
   beforeEach(() => {
     mockCanvas = document.createElement('canvas');
@@ -80,20 +87,20 @@ describe('Game Engine Logic', () => {
 
     // Reset keys before each test
     for (const key in keys) {
-      (keys as any)[key] = false;
+      (keys as Record<string, boolean>)[key] = false;
     }
 
     // createScene will assign to the global player and use mocked THREE components
     const { scene } = createScene(mockCanvas);
-    sceneFromSetup = scene; // Store for use in tests
+    sceneFromSetup = scene;
 
-    // Ensure player's parent is set for updateScene logic if it relies on it (though current engine.ts doesn't for player movement)
-    if (player && sceneFromSetup && sceneFromSetup.add.mock) {
-        // Check if player was added. If so, simulate parent assignment.
-        const playerAddedToScene = sceneFromSetup.add.mock.calls.some(callArgs => callArgs[0] === player);
-        if (playerAddedToScene) {
-            (player as any).parent = sceneFromSetup;
-        }
+    // Ensure player's parent is set for updateScene logic
+    const mockScene = sceneFromSetup as unknown as { add: { mock: { calls: unknown[][] } } };
+    if (player && mockScene.add?.mock) {
+      const playerAddedToScene = mockScene.add.mock.calls.some((callArgs: unknown[]) => callArgs[0] === player);
+      if (playerAddedToScene) {
+        (player as unknown as { parent: THREE.Scene }).parent = sceneFromSetup;
+      }
     }
   });
 
