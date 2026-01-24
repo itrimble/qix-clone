@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as THREE from 'three';
-import { QixEnemy, QIX_COLOR, QIX_SPEED, NUM_SEGMENTS } from './qix_enemy';
+import { QixEnemy } from './qix_enemy';
+import { QIX_COLOR, QIX_SPEED, QIX_NUM_SEGMENTS as NUM_SEGMENTS } from './config';
 
 const testInitialPos = new THREE.Vector2(0, 0);
 const testConfinement = { minX: -10, maxX: 10, minY: -10, maxY: 10 };

@@ -29,6 +29,14 @@ export const enemyType2Material = new THREE.MeshPhongMaterial({
 });
 
 
+// --- Edge Material (for wireframe highlights) ---
+export const edgeMaterial = new THREE.LineBasicMaterial({
+  color: 0xffffff,
+  linewidth: 1,
+  transparent: true,
+  opacity: 0.5
+});
+
 // --- Environment Materials & Colors ---
 export const gridColor = new THREE.Color(0x00ffff);         // Main grid lines (cyan)
 export const gridCenterLineColor = new THREE.Color(0x007777); // Center lines (darker cyan)

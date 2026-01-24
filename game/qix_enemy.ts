@@ -1,16 +1,17 @@
 import * as THREE from 'three';
-
-const QIX_COLOR = 0xff00ff; // Magenta
-const QIX_SPEED = 0.1; // Adjust as needed
-const NUM_SEGMENTS = 5; // Number of points in the Qix line
-const SEGMENT_LENGTH = 0.8; // Length of each segment, adjust for visual
-const ANIMATION_SPEED = 0.1; // How fast the Qix body undulates
+import {
+  QIX_COLOR,
+  QIX_SPEED,
+  QIX_NUM_SEGMENTS as NUM_SEGMENTS,
+  QIX_SEGMENT_LENGTH as SEGMENT_LENGTH,
+  QIX_ANIMATION_SPEED as ANIMATION_SPEED
+} from './config';
 
 export class QixEnemy {
   public mesh: THREE.Line;
   private points: THREE.Vector2[] = [];
-  private position: THREE.Vector2; // Center position
-  private velocity: THREE.Vector2;
+  public position: THREE.Vector2; // Center position (public for confinement adjustments)
+  public velocity: THREE.Vector2; // Public for velocity adjustments after confinement change
   private confinement: { minX: number, maxX: number, minY: number, maxY: number };
   private time: number = 0; // For animation
   public isFrozen: boolean = false;
@@ -35,7 +36,7 @@ export class QixEnemy {
     this.updateLineGeometry();
   }
 
-  private updateLineGeometry(): void {
+  public updateLineGeometry(): void {
      const currentAbsolutePoints: THREE.Vector3[] = [];
      this.points.forEach((p, index) => {
          // Simple undulation for body animation
@@ -72,7 +73,6 @@ export class QixEnemy {
           this.position.copy(oldPosition);
           this.velocity.x *= -1;
           this.velocity.y *= -1;
-          console.log("Qix bounced off captured area!");
           bouncedOffCapturedArea = true;
           break;
         }

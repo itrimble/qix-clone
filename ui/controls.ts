@@ -72,9 +72,7 @@ export function initControls(canvas: HTMLCanvasElement, scene: THREE.Scene, came
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
       keys[e.key] = true;
     }
-    
-    console.log(`Key down: ${e.key} (${keyLower})`);
-    
+
     // Prevent default for navigation keys
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'w', 'a', 's', 'd'].includes(keyLower)) {
       e.preventDefault();
@@ -101,8 +99,6 @@ export function initControls(canvas: HTMLCanvasElement, scene: THREE.Scene, came
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
       keys[e.key] = false;
     }
-    
-    console.log(`Key up: ${e.key} (${keyLower})`);
   }
   
   // Remove any existing listeners to prevent duplicates
@@ -186,7 +182,6 @@ export function initControls(canvas: HTMLCanvasElement, scene: THREE.Scene, came
   const handleTouch = (keyName: string, isPressed: boolean, event: TouchEvent) => {
     event.preventDefault(); // Prevent default browser actions like scrolling or zooming
     keys[keyName] = isPressed;
-    console.log(`Touch ${isPressed ? 'start' : 'end'}: ${keyName}`);
   };
 
   if (touchUp) {

@@ -2,23 +2,29 @@ import * as THREE from 'three';
 import { initControls, keys } from './ui/controls';
 import { initTrail, updateTrail, clearTrail, getTrailPoints } from './game/trail';
 import { createScene, updateScene, player } from './game/engine';
-import {
-    getOrientation,
-    onSegment,
-    segmentsIntersect,
-    createOrderedCorners,
-    getSegmentForPoint,
-    getBoundaryPath,
-    calculateQixPolygons
-} from './game/geometryUtils';
+import { segmentsIntersect, createOrderedCorners, calculateQixPolygons } from './game/geometryUtils';
 import { QixEnemy } from './game/qix_enemy';
 import { SparxEnemy } from './game/sparx_enemy';
 import { PowerUp, PowerUpType, FreezeQixPowerUp, PlayerSpeedBoostPowerUp, GameTargets } from './game/powerup';
 import { playSound, preloadAllGameSounds } from './sound/sound';
-
-// LocalStorage Keys
-const STORAGE_KEY_HIGH_SCORE = 'qixCloneGame_highScore';
-const STORAGE_KEY_MAX_AREA = 'qixCloneGame_maxAreaCaptured';
+import {
+    GRID_LIMIT,
+    TOTAL_GAME_AREA,
+    MAX_POWERUPS_ON_BOARD,
+    POWERUP_SPAWN_INTERVAL,
+    POWERUP_SIZE,
+    POWERUP_SPAWN_MARGIN,
+    FUSE_ACTIVATION_DELAY,
+    EPSILON,
+    QIX_PUSH_MARGIN,
+    INITIAL_LIVES,
+    PLAYER_SPARX_COLLISION_THRESHOLD,
+    BOUNDARY_TOLERANCE
+} from './game/config';
+import { GameState, createInitialGameState, updateHUD, cacheHUDElements } from './game/gameState';
+import { createDebugInfo, getDebugDiv, updateDebugInfo } from './ui/debug';
+import { showGameOverScreen, hideGameOverScreen, cacheGameOverElements, getRestartButton } from './ui/gameOverScreen';
+import { enhanceModalInteraction } from './ui/modals';
 
 // Global variables
 interface CapturedAreaData {
@@ -33,240 +39,30 @@ let canvas: HTMLCanvasElement;
 let lastTime = performance.now();
 let running = true;
 let spacebarWasPressed = false;
-let isDrawing = false; // Tracks if the player is currently drawing a trail
+let isDrawing = false;
 
-const gridLimit = 14; // Defines the boundary for starting/ending drawing
-const totalGameArea = (2 * gridLimit) * (2 * gridLimit); // Total area of the game grid
-let capturedAreaDataList: CapturedAreaData[] = []; // Changed from capturedAreas
+// Use centralized config values
+const gridLimit = GRID_LIMIT;
+const totalGameArea = TOTAL_GAME_AREA;
+let capturedAreaDataList: CapturedAreaData[] = [];
 let qix: QixEnemy;
 let sparxEnemies: SparxEnemy[] = [];
 let playerSpeedMultiplier = { value: 1.0 };
-// let originalPlayerColor = new THREE.Color(0x00ff00); // Default green from engine.ts - this seems unused now
 
 // PowerUp Management
 let powerUpsOnBoard: PowerUp[] = [];
 let activePowerUpEffects: PowerUp[] = [];
-const MAX_POWERUPS_ON_BOARD = 2;
-const POWERUP_SPAWN_INTERVAL = 15.0; // seconds
 let timeSinceLastPowerUpSpawn = 0.0;
-const POWERUP_SIZE = 0.7; // Should match size used in PowerUp subclasses for bounding box
-
-// DOM Element References for Game Over Screen
-let gameOverOverlay: HTMLElement | null;
-let finalScoreEl: HTMLElement | null;
-let finalAreaEl: HTMLElement | null;
-let restartButton: HTMLElement | null;
-let highScoreDisplayEl: HTMLElement | null;
-let maxAreaDisplayEl: HTMLElement | null;
-// Note: 'canvas' is already our reference to the game canvas element
 
 // Fuse Mechanic Variables
 let timeTrailOpen: number = 0.0;
-const FUSE_ACTIVATION_DELAY_SECONDS: number = 3.0;
 let fuseActiveOnTrail: boolean = false;
 
 // Qix Confinement
 let qixConfinementRect: { minX: number, maxX: number, minY: number, maxY: number };
 
-// Debug info display
-function createDebugInfo() {
-  const div = document.createElement('div');
-  div.style.position = 'absolute';
-  div.style.top = '50px';
-  div.style.right = '10px';
-  div.style.backgroundColor = 'rgba(0,0,0,0.7)';
-  div.style.color = 'cyan';
-  div.style.padding = '10px';
-  div.style.fontFamily = 'monospace';
-  div.style.border = '1px solid cyan';
-  div.style.zIndex = '1000';
-  div.style.pointerEvents = 'none'; // Don't block clicks
-  div.id = 'debugInfo';
-  document.body.appendChild(div);
-  return div;
-}
-
-// Enhanced modal interaction
-function enhanceModalInteraction() {
-  // Get all the modal elements
-  const modal = document.getElementById('settings-modal');
-  const closeBtn = document.getElementById('close-settings');
-  const levelUpBtn = document.getElementById('level-up');
-  const darkModeCheckbox = document.getElementById('darkMode');
-  const casualModeCheckbox = document.getElementById('casualMode');
-  const crtFilterCheckbox = document.getElementById('crtFilter');
-  
-  // Make sure the modal close button works
-  if (closeBtn) {
-    closeBtn.addEventListener('click', function() {
-      if (modal) modal.classList.add('hidden');
-    });
-  }
-  
-  // LEVEL UP button functionality
-  if (levelUpBtn) {
-    levelUpBtn.addEventListener('click', function() {
-      console.log('Level up clicked!');
-      if (modal) modal.classList.add('hidden');
-      
-      // Show some on-screen feedback
-      const flashElement = document.createElement('div');
-      flashElement.textContent = 'LEVEL UP!';
-      flashElement.style.position = 'absolute';
-      flashElement.style.top = '50%';
-      flashElement.style.left = '50%';
-      flashElement.style.transform = 'translate(-50%, -50%)';
-      flashElement.style.color = '#00ffff';
-      flashElement.style.fontFamily = 'Orbitron, sans-serif';
-      flashElement.style.fontSize = '32px';
-      flashElement.style.fontWeight = 'bold';
-      flashElement.style.zIndex = '1000';
-      document.body.appendChild(flashElement);
-      
-      // Remove the flash message after a delay
-      setTimeout(() => {
-        document.body.removeChild(flashElement);
-      }, 2000);
-    });
-  }
-  
-  // Make sure checkboxes work
-  if (darkModeCheckbox) {
-    darkModeCheckbox.addEventListener('change', function() {
-      document.body.classList.toggle('dark-mode', this.checked);
-    });
-  }
-  
-  if (casualModeCheckbox) {
-    casualModeCheckbox.addEventListener('change', function() {
-      console.log('Casual mode:', this.checked);
-    });
-  }
-  
-  if (crtFilterCheckbox) {
-    crtFilterCheckbox.addEventListener('change', function() {
-      document.body.classList.toggle('crt', this.checked);
-      const crtButton = document.getElementById('crt-toggle');
-      if (crtButton) {
-        crtButton.textContent = this.checked ? 'CRT: ON' : 'CRT: OFF';
-      }
-    });
-  }
-}
-
-// Update game elements and HUD
-function updateHUD() {
-  const scoreElement = document.getElementById('score');
-  const livesElement = document.getElementById('lives');
-  const capturedElement = document.getElementById('captured');
-  
-  if (scoreElement) scoreElement.textContent = `Score: ${gameState.score}`;
-  if (livesElement) livesElement.textContent = `Lives: ${gameState.lives}`;
-  if (capturedElement) capturedElement.textContent = `Captured: ${gameState.captured}%`;
-}
-
-// Game state
-const gameState = {
-  score: 0,
-  lives: 3,
-  captured: 0,
-  level: 1
-};
-
-// --- LocalStorage Helper Functions ---
-function loadHighScore(): number {
-  try {
-    const storedScoreStr = localStorage.getItem(STORAGE_KEY_HIGH_SCORE);
-    if (storedScoreStr !== null) {
-      const score = parseFloat(storedScoreStr);
-      return isNaN(score) ? 0 : score;
-    }
-  } catch (e) {
-    console.error("Error loading high score from localStorage:", e);
-  }
-  return 0;
-}
-
-function saveHighScore(newScore: number): void {
-  try {
-    const currentHighScore = loadHighScore();
-    if (newScore > currentHighScore) {
-      localStorage.setItem(STORAGE_KEY_HIGH_SCORE, newScore.toString());
-      console.log(`New High Score saved: ${newScore}`);
-    }
-  } catch (e) {
-    console.error("Error saving high score to localStorage:", e);
-  }
-}
-
-function loadMaxArea(): number {
-  try {
-    const storedAreaStr = localStorage.getItem(STORAGE_KEY_MAX_AREA);
-    if (storedAreaStr !== null) {
-      const area = parseFloat(storedAreaStr);
-      return isNaN(area) ? 0 : area;
-    }
-  } catch (e) {
-    console.error("Error loading max area from localStorage:", e);
-  }
-  return 0;
-}
-
-function saveMaxArea(newArea: number): void {
-  try {
-    const currentMaxArea = loadMaxArea();
-    const formattedNewArea = parseFloat(newArea.toFixed(1)); // Consistent precision
-
-    if (formattedNewArea > currentMaxArea) {
-      localStorage.setItem(STORAGE_KEY_MAX_AREA, formattedNewArea.toString());
-      console.log(`New Max Area Captured saved: ${formattedNewArea}%`);
-    }
-  } catch (e) {
-    console.error("Error saving max area to localStorage:", e);
-  }
-}
-// --- End LocalStorage Helper Functions ---
-
-// --- Game Over Screen Functions ---
-function showGameOverScreen() {
-  // Ensure gameState reflects the final values for the game just ended
-  saveHighScore(gameState.score);
-  saveMaxArea(gameState.captured);
-  playSound('gameOver');
-
-  if (gameOverOverlay && finalScoreEl && finalAreaEl && canvas ) {
-    finalScoreEl.textContent = gameState.score.toString();
-    finalAreaEl.textContent = gameState.captured.toFixed(1); // Format to 1 decimal place for current game display
-
-    if (highScoreDisplayEl && maxAreaDisplayEl) {
-      const allTimeHighScore = loadHighScore();
-      const allTimeMaxArea = loadMaxArea();
-
-      highScoreDisplayEl.textContent = allTimeHighScore.toString();
-      maxAreaDisplayEl.textContent = allTimeMaxArea.toFixed(1); // Consistent formatting
-
-      console.log(`Displayed All-Time High Score: ${allTimeHighScore}, Max Area: ${allTimeMaxArea}%`);
-    } else {
-      console.error("DOM elements for displaying best stats not found!");
-    }
-
-    gameOverOverlay.classList.remove('hidden');
-    canvas.classList.add('game-canvas-paused');
-
-    console.log("Game Over Screen Shown. Scores saved (if new records). Best stats displayed.");
-  } else {
-    console.error("Game Over screen DOM elements not found for showing!");
-  }
-}
-
-function hideGameOverScreen() {
-  if (gameOverOverlay && canvas) {
-    gameOverOverlay.classList.add('hidden');
-    canvas.classList.remove('game-canvas-paused'); // Remove blur/dim effect
-    console.log("Game Over Screen Hidden");
-  }
-}
-// --- End Game Over Screen Functions ---
+// Game state (using module)
+const gameState: GameState = createInitialGameState();
 
 // --- Game Restart Function ---
 function restartGame() {
@@ -274,11 +70,11 @@ function restartGame() {
   hideGameOverScreen();
 
   // Reset game state
-  gameState.lives = 3;
+  gameState.lives = INITIAL_LIVES;
   gameState.score = 0;
   gameState.captured = 0;
-  // gameState.level = 1; // If levels were a thing
-  updateHUD(); // Update HUD immediately
+  gameState.level = 1;
+  updateHUD(gameState);
 
   // Reset player
   player.position.set(-gridLimit, -gridLimit, 0); // Uses global gridLimit
@@ -362,7 +158,7 @@ function updateQixConfinementOnCapture(capturedShape: THREE.Shape) {
   let newMinY = currentQixConf.minY;
   let newMaxY = currentQixConf.maxY;
   let confinementChanged = false;
-  const epsilon = 0.1;
+  const epsilon = EPSILON;
 
   // Check for slice from LEFT
   if (Math.abs(capturedBox.min.x - currentQixConf.minX) < epsilon &&
@@ -399,12 +195,11 @@ function updateQixConfinementOnCapture(capturedShape: THREE.Shape) {
 
   if (confinementChanged) {
     qixConfinementRect = { minX: newMinX, maxX: newMaxX, minY: newMinY, maxY: newMaxY };
-    console.log("Qix global confinement rect updated to:", qixConfinementRect);
     qix.setConfinement(qixConfinementRect);
 
     let qixPosAdjusted = false;
     const qixLogicPos = qix.position;
-    const pushMargin = 0.2;
+    const pushMargin = QIX_PUSH_MARGIN;
 
     if (qixLogicPos.x < qixConfinementRect.minX) {
         qixLogicPos.x = qixConfinementRect.minX + pushMargin; qixPosAdjusted = true;
@@ -426,7 +221,6 @@ function updateQixConfinementOnCapture(capturedShape: THREE.Shape) {
     if (qixPosAdjusted) {
       qix.mesh.position.set(qixLogicPos.x, qixLogicPos.y, 0);
       qix.updateLineGeometry();
-      console.log("Qix position and velocity adjusted for new confinement:", qixLogicPos, qix.velocity);
     }
   }
 }
@@ -438,7 +232,7 @@ function trySpawnPowerUp(dt: number) {
     timeSinceLastPowerUpSpawn = 0; // Reset timer
 
     let spawnPosition: THREE.Vector2 | null = null;
-    const spawnMargin = 2.0; // Don't spawn too close to edges
+    const spawnMargin = POWERUP_SPAWN_MARGIN;
     const maxAttempts = 10; // Attempts to find a valid spawn position
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -478,9 +272,6 @@ function trySpawnPowerUp(dt: number) {
 
       powerUpsOnBoard.push(newPowerUp);
       scene.add(newPowerUp.mesh);
-      console.log(`Spawned ${newPowerUp.type} at (${spawnPosition.x.toFixed(2)}, ${spawnPosition.y.toFixed(2)})`);
-    } else {
-      console.log("Failed to find suitable spawn location for power-up after multiple attempts.");
     }
   }
 }
@@ -552,13 +343,11 @@ function animate() {
   // Player-Sparx Collision Check (Player on Boundary)
   if (!isDrawing && running) { // Only check if not drawing and game is running
     const playerOnBoundary =
-      Math.abs(Math.abs(player.position.x) - gridLimit) < 0.1 ||
-      Math.abs(Math.abs(player.position.y) - gridLimit) < 0.1;
+      Math.abs(Math.abs(player.position.x) - gridLimit) < BOUNDARY_TOLERANCE ||
+      Math.abs(Math.abs(player.position.y) - gridLimit) < BOUNDARY_TOLERANCE;
 
     if (playerOnBoundary) {
-      const PLAYER_SIZE = 2.0;
-      const SPARX_SIZE = 0.5; // From SparxEnemy.SPARX_SIZE
-      const collisionThreshold = (PLAYER_SIZE / 2) + (SPARX_SIZE / 2);
+      const collisionThreshold = PLAYER_SPARX_COLLISION_THRESHOLD;
 
       for (const sparx of sparxEnemies) {
         // Ensure sparx.mesh and player.position are valid THREE.Vector3 instances
@@ -566,17 +355,14 @@ function animate() {
         // sparx.mesh.position is also a Vector3
         const distance = player.position.distanceTo(sparx.mesh.position);
         if (distance < collisionThreshold) {
-          console.log("Player hit by Sparx on boundary!");
           gameState.lives--;
           playSound('playerDeath');
 
           if (gameState.lives > 0) {
-            player.position.set(-gridLimit, -gridLimit, 0); // Reposition to bottom-left corner
-            console.log(`Player repositioned after Sparx collision. Lives: ${gameState.lives}`);
-          } else { // gameState.lives <= 0
-            console.log("GAME OVER - Hit by Sparx!");
+            player.position.set(-gridLimit, -gridLimit, 0);
+          } else {
             running = false;
-            showGameOverScreen();
+            showGameOverScreen(gameState);
           }
           // isDrawing is already false.
           // No trail to clear as player wasn't drawing.
@@ -595,11 +381,8 @@ function animate() {
       timeTrailOpen = 0.0; // Reset fuse timer
       fuseActiveOnTrail = false; // Reset fuse active flag for this trail
       clearTrail(scene); // Clear any previous partial trail
-      initTrail(scene);  // Start a new trail
+      initTrail(scene);
       playSound('drawStart');
-      console.log('Drawing started from boundary.');
-    } else {
-      console.log('Cannot start drawing from open space for capture. Must be on a boundary.');
     }
   }
 
@@ -612,68 +395,44 @@ function animate() {
       // --- Start of Capture Logic ---
       const playerTrailFull = getTrailPoints();
 
-      if (playerTrailFull.length < 2) {
-        console.log("Trail too short to capture.");
-        // No trail to clear as it's too short or already cleared by self-intersection.
-      } else {
+      if (playerTrailFull.length >= 2) {
         const playerTrailVec2 = playerTrailFull.map(p => new THREE.Vector2(p.x, p.y));
-
         const { polygon1, polygon2 } = calculateQixPolygons(playerTrailVec2, gridLimit);
 
-        if (polygon1.length < 3 || polygon2.length < 3) {
-          console.error("Invalid polygons returned from calculation. Skipping capture.");
-        } else {
+        if (polygon1.length >= 3 && polygon2.length >= 3) {
           let chosenPolygonVertices: THREE.Vector2[] | null = null;
           let actualFilledArea = 0;
 
-          const area1 = THREE.ShapeUtils.area(polygon1); // Already checked length >= 3
+          const area1 = THREE.ShapeUtils.area(polygon1);
           const area2 = THREE.ShapeUtils.area(polygon2);
-
-          console.log(`Calculated Polygon Areas: Area1=${area1.toFixed(2)}, Area2=${area2.toFixed(2)}`);
-
           const absArea1 = Math.abs(area1);
           const absArea2 = Math.abs(area2);
 
           if (absArea1 > 0 && (absArea1 <= absArea2 || absArea2 === 0)) {
             chosenPolygonVertices = [...polygon1];
             actualFilledArea = absArea1;
-            if (area1 < 0) { // Ensure CCW winding for THREE.Shape
-              chosenPolygonVertices.reverse();
-              console.log("Polygon 1 chosen and reversed for CCW winding.");
-            } else {
-              console.log("Polygon 1 chosen.");
-            }
+            if (area1 < 0) chosenPolygonVertices.reverse();
           } else if (absArea2 > 0) {
             chosenPolygonVertices = [...polygon2];
             actualFilledArea = absArea2;
-            if (area2 < 0) { // Ensure CCW winding for THREE.Shape
-              chosenPolygonVertices.reverse();
-              console.log("Polygon 2 chosen and reversed for CCW winding.");
-            } else {
-              console.log("Polygon 2 chosen.");
-            }
-          } else {
-            console.log("Neither polygon has a valid area for capture.");
+            if (area2 < 0) chosenPolygonVertices.reverse();
           }
 
           if (chosenPolygonVertices && actualFilledArea > 0) {
-            console.log(`Selected polygon with area: ${actualFilledArea.toFixed(2)}`);
-
-            const shape = new THREE.Shape(chosenPolygonVertices); // This is the 'shape' instance we need
-            updateQixConfinementOnCapture(shape); // Call the new function
+            const shape = new THREE.Shape(chosenPolygonVertices);
+            updateQixConfinementOnCapture(shape);
             const geometry = new THREE.ShapeGeometry(shape);
-            const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }); // Changed color for testing
+            const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
             const capturedMesh = new THREE.Mesh(geometry, material);
             scene.add(capturedMesh);
-            capturedAreaDataList.push({ mesh: capturedMesh, shape: shape }); // Ensure this line is correct
+            capturedAreaDataList.push({ mesh: capturedMesh, shape: shape });
 
             playSound('areaCapture');
-            // Deactivate Fuse if active upon successful capture
+
             if (fuseActiveOnTrail) {
-              for (const sparx_fuse_check of sparxEnemies) { // Renamed sparx to avoid conflict
+              for (const sparx_fuse_check of sparxEnemies) {
                 if (sparx_fuse_check.isFuse) {
                   sparx_fuse_check.deactivateFuseMode();
-                  console.log("Active Fuse Sparx deactivated due to area capture.");
                 }
               }
               fuseActiveOnTrail = false;
@@ -682,18 +441,13 @@ function animate() {
             const newlyCapturedPercent = (actualFilledArea / totalGameArea) * 100;
             gameState.captured += newlyCapturedPercent;
             gameState.captured = Math.min(gameState.captured, 100);
-            gameState.score += Math.round(actualFilledArea); // Or some other score metric
-            console.log(`(Updated GS) Filled Area: ${actualFilledArea.toFixed(2)}, New %: ${newlyCapturedPercent.toFixed(2)}, Total %: ${gameState.captured.toFixed(2)}, Score: ${gameState.score}`);
-          } else {
-            console.log("No valid polygon chosen for capture. No area filled.");
+            gameState.score += Math.round(actualFilledArea);
           }
         }
       }
-      clearTrail(scene); // Clear the drawing line trail regardless of capture success
-      // --- End of Capture Logic ---
+      clearTrail(scene);
     } else {
-      console.log('Drawing finished in open space (not on a boundary). Trail cleared.');
-      clearTrail(scene); // Clear incomplete trail
+      clearTrail(scene);
     }
   }
   spacebarWasPressed = keys[' ']; // Update state for next frame
@@ -704,7 +458,7 @@ function animate() {
 
     // Increment trail open timer and check for Fuse activation
     timeTrailOpen += deltaTime;
-    if (!fuseActiveOnTrail && timeTrailOpen > FUSE_ACTIVATION_DELAY_SECONDS) {
+    if (!fuseActiveOnTrail && timeTrailOpen > FUSE_ACTIVATION_DELAY) {
       // let fuseActivatedThisFrame = false; // Not strictly needed if only one fuse per trail
       for (const sparx of sparxEnemies) {
         if (!sparx.isFuse) {
@@ -713,8 +467,6 @@ function animate() {
             const playerTrailVec2 = playerTrailVec3.map(p => new THREE.Vector2(p.x, p.y));
             sparx.activateFuseMode(playerTrailVec2);
             fuseActiveOnTrail = true;
-            // fuseActivatedThisFrame = true;
-            console.log("Fuse mechanic activated on a Sparx.");
             break;
           }
         }
@@ -736,23 +488,20 @@ function animate() {
 
           for (const qixSeg of qixBodySegments) {
             if (segmentsIntersect(trailSegP1, trailSegP2, qixSeg.p1, qixSeg.p2)) {
-              console.log("Player trail hit Qix!");
               gameState.lives--;
               playSound('playerDeath');
               isDrawing = false;
-              fuseActiveOnTrail = false; // Reset fuse active flag
+              fuseActiveOnTrail = false;
               clearTrail(scene);
 
               if (gameState.lives > 0) {
-                player.position.set(-gridLimit, -gridLimit, 0); // Reposition to bottom-left corner
-                console.log(`Player repositioned after Qix collision. Lives: ${gameState.lives}`);
-              } else { // gameState.lives <= 0
-                console.log("GAME OVER - Hit Qix!");
+                player.position.set(-gridLimit, -gridLimit, 0);
+              } else {
                 running = false;
-                showGameOverScreen();
+                showGameOverScreen(gameState);
               }
               collisionWithQixDetected = true;
-              break; // Break from inner qixSeg loop
+              break;
             }
           }
           if (collisionWithQixDetected) {
@@ -768,14 +517,11 @@ function animate() {
     if (running) { // Check 'running' again, as Qix collision might have set it to false
       for (const sparx of sparxEnemies) {
         if (sparx.isFuse) {
-          const PLAYER_SIZE = 2.0;
-          const SPARX_SIZE = 0.5;
-          const FUSE_COLLISION_THRESHOLD = (PLAYER_SIZE / 2) + (SPARX_SIZE / 2);
+          const FUSE_COLLISION_THRESHOLD = PLAYER_SPARX_COLLISION_THRESHOLD;
 
           const distance = player.position.distanceTo(sparx.mesh.position);
 
           if (distance < FUSE_COLLISION_THRESHOLD) {
-            console.log("Player caught by Fuse!");
             gameState.lives--;
             playSound('playerDeath');
             isDrawing = false;
@@ -785,11 +531,9 @@ function animate() {
 
             if (gameState.lives > 0) {
               player.position.set(-gridLimit, -gridLimit, 0);
-              console.log(`Player repositioned after Fuse collision. Lives: ${gameState.lives}`);
             } else {
-              console.log("GAME OVER - Caught by Fuse!");
               running = false;
-              showGameOverScreen();
+              showGameOverScreen(gameState);
             }
             break;
           }
@@ -814,23 +558,19 @@ function animate() {
         const tailP2 = trailToCheckAsV2[i+1];
 
         if (segmentsIntersect(headP1, headP2, tailP1, tailP2)) {
-          console.log("Trail crossed itself!");
           gameState.lives--;
           playSound('playerDeath');
-          isDrawing = false; // Stop drawing
-          fuseActiveOnTrail = false; // Reset fuse active flag
-          clearTrail(scene);  // Clear the offending trail
-          // updateHUD(); // updateHUD is called every frame anyway, but if not, call here
+          isDrawing = false;
+          fuseActiveOnTrail = false;
+          clearTrail(scene);
 
-          if (gameState.lives <= 0) { // This else block is for trail self-intersection
-            console.log("GAME OVER - No lives left (self-intersection).");
-            running = false; // Stop the game loop
-            showGameOverScreen();
-          } else { // Player lost a life due to self-intersection but game not over
-             player.position.set(-gridLimit, -gridLimit, 0); // Reposition to bottom-left corner
-             console.log(`Player repositioned after self-intersection. Lives: ${gameState.lives}`);
+          if (gameState.lives <= 0) {
+            running = false;
+            showGameOverScreen(gameState);
+          } else {
+            player.position.set(-gridLimit, -gridLimit, 0);
           }
-          break; // Exit loop once an intersection is found
+          break;
         }
       }
     }
@@ -838,26 +578,25 @@ function animate() {
   }
   
   // Update HUD
-  updateHUD();
-  
+  updateHUD(gameState);
+
   // Render the scene
   renderer.render(scene, camera);
-  
+
   // Update debug info
-  // const now = performance.now(); // 'now' is already calculated for deltaTime
-  const fps = 1000 / (now - lastTime); // This will be high if lastTime isn't updated correctly before this
-  lastTime = now; // Update lastTime for the next frame's deltaTime and current frame's FPS
-  
+  const fps = 1000 / (now - lastTime);
+  lastTime = now;
+
+  const debugDiv = getDebugDiv();
   if (debugDiv) {
     const activeKeys = Object.entries(keys).filter(([k, v]) => v).map(([k]) => k);
-    
-    debugDiv.innerHTML = `
-      Player: x=${player.position.x.toFixed(2)}, 
-              y=${player.position.y.toFixed(2)}, 
-              z=${player.position.z.toFixed(2)}<br>
-      FPS: ${fps.toFixed(1)}<br>
-      Keys: ${activeKeys.join(', ')}
-    `;
+    updateDebugInfo(
+      player.position.x,
+      player.position.y,
+      player.position.z,
+      fps,
+      activeKeys
+    );
   }
 }
 
@@ -944,27 +683,23 @@ window.onload = () => {
   // Expose game state globally for debugging
   (window as any).gameState = gameState;
 
-  // Assign Game Over Screen DOM elements
-  gameOverOverlay = document.getElementById('game-over-overlay');
-  finalScoreEl = document.getElementById('final-score');
-  finalAreaEl = document.getElementById('final-area');
-  restartButton = document.getElementById('restart-button');
-  highScoreDisplayEl = document.getElementById('high-score-display');
-  maxAreaDisplayEl = document.getElementById('max-area-display');
-  // 'canvas' is already assigned earlier in window.onload
+  // Cache DOM elements for HUD and Game Over screen
+  cacheHUDElements();
+  cacheGameOverElements(canvas);
 
   // Preload sounds
   preloadAllGameSounds()
     .then((results) => {
       console.log("Sound preload process completed.");
       results.forEach(result => {
-        if (result.status === 'rejected') {
-          console.error("A sound failed to preload:", result.reason);
+        if (result && typeof result === 'object' && 'status' in result && result.status === 'rejected') {
+          console.error("A sound failed to preload:", (result as PromiseRejectedResult).reason);
         }
       });
     });
 
   // Add event listener for restart button
+  const restartButton = getRestartButton();
   if (restartButton) {
     restartButton.addEventListener('click', () => {
       playSound('buttonClick');

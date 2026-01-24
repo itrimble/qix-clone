@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-
-const SPARX_COLOR = 0xffff00; // Yellow
-const FUSE_COLOR = 0xff0000; // Red
-const SPARX_SPEED = 0.05; // Adjust as needed (typically slower than Qix)
-const FUSE_SPEED_MULTIPLIER = 1.5; // Fuse is 1.5x faster than normal Sparx speed
-const SPARX_SIZE = 0.5;   // Size of the Sparx cube
+import {
+  SPARX_COLOR,
+  FUSE_COLOR,
+  SPARX_SPEED,
+  FUSE_SPEED_MULTIPLIER,
+  SPARX_SIZE
+} from './config';
 
 export class SparxEnemy {
   public mesh: THREE.Mesh;
@@ -120,7 +121,6 @@ export class SparxEnemy {
   update(deltaTime: number): void {
     if (this.isFuse) {
       if (!this.currentTrailPoints || this.currentTargetTrailPointIndex >= this.currentTrailPoints.length) {
-        console.log("Fuse: No trail or end of its trail copy reached.");
         this.deactivateFuseMode();
         return;
       }
@@ -135,9 +135,7 @@ export class SparxEnemy {
         this.position.copy(targetPoint);
         this.currentTargetTrailPointIndex++;
         if (this.currentTargetTrailPointIndex >= this.currentTrailPoints.length) {
-          console.log("Fuse has reached the end of the provided trail path.");
-          // It will now wait at the last point. Collision will handle if player is there.
-          // Or, if it should return to patrolling: this.deactivateFuseMode();
+          // Fuse has reached the end of the trail - wait for collision or deactivation
         }
       } else {
         directionToTarget.normalize().multiplyScalar(moveDistance);

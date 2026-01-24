@@ -1,12 +1,52 @@
 import * as THREE from 'three';
 import { createStarfield, createNebulaGradient } from './backgrounds';
 import { keys } from '../ui/controls';
+import { BASE_PLAYER_SPEED, GRID_LIMIT } from './config';
 
-export const BASE_PLAYER_SPEED = 0.25;
-export const gridLimit = 14; // Slightly less than grid size/2
+// Re-export for backward compatibility
+export { BASE_PLAYER_SPEED };
+export const gridLimit = GRID_LIMIT;
 
 // Global variables
 export let player: THREE.Mesh;
+
+// C64 retro mode state
+let c64ModeEnabled = false;
+
+// Game reset callback (set by main.ts)
+let gameResetCallback: (() => Promise<void>) | null = null;
+
+export function setGameResetCallback(callback: () => Promise<void>): void {
+  gameResetCallback = callback;
+}
+
+export function saveGameState(): void {
+  try {
+    const gameState = {
+      playerPosition: player ? { x: player.position.x, y: player.position.y, z: player.position.z } : null,
+      c64Mode: c64ModeEnabled,
+      timestamp: Date.now()
+    };
+    localStorage.setItem('qix_game_state', JSON.stringify(gameState));
+    console.log('Game state saved');
+  } catch (e) {
+    console.error('Error saving game state:', e);
+  }
+}
+
+export function toggleC64Mode(): void {
+  c64ModeEnabled = !c64ModeEnabled;
+  document.body.classList.toggle('c64-mode', c64ModeEnabled);
+  console.log(`C64 Retro mode: ${c64ModeEnabled ? 'ON' : 'OFF'}`);
+}
+
+export async function triggerGameReset(): Promise<void> {
+  if (gameResetCallback) {
+    await gameResetCallback();
+  } else {
+    console.warn('No game reset callback registered');
+  }
+}
 
 export function createScene(canvas: HTMLCanvasElement) {
   console.log('Creating scene...');
@@ -76,11 +116,7 @@ export function updateScene(scene: THREE.Scene, speedMultiplier: number): void {
   // Handle player movement
   const currentSpeed = BASE_PLAYER_SPEED * speedMultiplier;
   
-  // Verbose debugging when keys are pressed
-  const activeKeys = Object.entries(keys).filter(([k, v]) => v).map(([k]) => k);
-  if (activeKeys.length > 0) {
-    console.log('Active keys:', activeKeys.join(', '));
-  }
+  // Key state is now handled without verbose logging for performance
   
   // Move player based on keyboard input
   if (keys['arrowup'] || keys['ArrowUp'] || keys['w']) {

@@ -13,7 +13,9 @@ export const SOUND_ASSETS = {
   fuseActivate: { name: "fuseActivate", path: "assets/sounds/sfx_fuse_activate.wav" },
   gameOver: { name: "gameOver", path: "assets/sounds/sfx_game_over.wav" },
   buttonClick: { name: "buttonClick", path: "assets/sounds/sfx_button_click.wav" },
-  // Add more sounds here as needed
+  levelUp: { name: "levelUp", path: "assets/sounds/sfx_level_up.wav" },
+  collision: { name: "collision", path: "assets/sounds/sfx_collision.wav" },
+  gameover: { name: "gameover", path: "assets/sounds/sfx_game_over.wav" },
 };
 
 export function preloadSound(soundNameKey: keyof typeof SOUND_ASSETS): Promise<void> {
@@ -164,4 +166,18 @@ export function setMusicVolume(volume: number): void {
         backgroundMusic.volume = Math.max(0, Math.min(1, masterVolume * preferredMusicVolume));
     }
     console.log(`Preferred music volume set to: ${preferredMusicVolume}`);
+}
+
+// --- Convenience music functions (used by levelManager) ---
+
+export function stopCurrentMusic(): void {
+    stopMusic();
+}
+
+export function playStandardMusic(): void {
+    loadAndPlayMusic('assets/music/background_standard.mp3', true, 0.3);
+}
+
+export function playTenseMusic(): void {
+    loadAndPlayMusic('assets/music/background_tense.mp3', true, 0.4);
 }
