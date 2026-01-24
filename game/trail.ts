@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createTrailMaterial } from './materials';
 
-const MAX_TRAIL_POINTS = 500;
+export const MAX_TRAIL_POINTS = 500;
 
 // Module-scoped variables for the trail state
 let trailPoints: THREE.Vector3[] = []; // Stores the Vector3 points for easy access/copying

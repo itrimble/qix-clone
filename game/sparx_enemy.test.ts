@@ -176,7 +176,7 @@ describe('SparxEnemy', () => {
       expect(sparx.trailPointIndex).toBe(1);
 
       // Need more steps or longer deltaTime to reach (0.1,0)
-      sparx.position.set(0.09,0,0); // Manually set closer
+      sparx.position.set(0.09, 0); // Manually set closer (Vector2 takes x, y)
       sparx.update(0.016); // Should now pass 0.1 and snap
 
       expect(sparx.position.equals(trail[1])).toBe(true); // Snapped to (0.1,0)

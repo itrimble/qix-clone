@@ -104,7 +104,6 @@ describe('Enemy (Base Class)', () => {
       position: new THREE.Vector3(1, 2, 3),
       speed: 0.1,
       material: customMaterial,
-      name: 'CustomEnemy'
     };
     const enemy = new Enemy(options);
     const meshInstance = (THREE.Mesh as any).mock.results[0].value;
@@ -112,7 +111,6 @@ describe('Enemy (Base Class)', () => {
     expect(meshInstance.material).toBe(customMaterial);
     expect(meshInstance.position.equals(new THREE.Vector3(1, 2, 3))).toBe(true);
     expect(enemy.speed).toBe(0.1);
-    // Note: name property is not currently implemented in Enemy constructor
   });
 
   it('update should update the bounding box', () => {

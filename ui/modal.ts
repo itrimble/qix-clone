@@ -45,20 +45,20 @@ export function enhanceModalInteraction() {
   
   // Make sure checkboxes work
   if (darkModeCheckbox) {
-    darkModeCheckbox.addEventListener('change', function() {
+    darkModeCheckbox.addEventListener('change', function(this: HTMLInputElement) {
       document.body.classList.toggle('dark-mode', this.checked);
     });
   }
-  
+
   if (casualModeCheckbox) {
-    casualModeCheckbox.addEventListener('change', function() {
+    casualModeCheckbox.addEventListener('change', function(this: HTMLInputElement) {
       // Implement your casual mode logic here
       console.log('Casual mode:', this.checked);
     });
   }
-  
+
   if (crtFilterCheckbox) {
-    crtFilterCheckbox.addEventListener('change', function() {
+    crtFilterCheckbox.addEventListener('change', function(this: HTMLInputElement) {
       document.body.classList.toggle('crt', this.checked);
       const crtButton = document.getElementById('crt-toggle');
       if (crtButton) {

@@ -192,7 +192,7 @@ describe('LevelManager', () => {
     // Ensure getBoundingBox on the enemy mock returns a box that intersects with player
     // The player's bounding box will be computed based on its geometry centered at (0,0,0)
     // The enemy's bounding box is mocked directly.
-    enemy.getBoundingBox.mockReturnValue(new THREE.Box3(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5)));
+    (enemy.getBoundingBox as ReturnType<typeof vi.fn>).mockReturnValue(new THREE.Box3(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5)));
 
     const initialLives = levelManager.lives;
     const initialScore = 50;
@@ -217,7 +217,7 @@ describe('LevelManager', () => {
   it.skip('should trigger game over when lives reach zero after a collision', () => {
     player.position.set(0, 0, 0);
     const enemy = levelManager.enemies[0];
-    enemy.getBoundingBox.mockReturnValue(new THREE.Box3(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5)));
+    (enemy.getBoundingBox as ReturnType<typeof vi.fn>).mockReturnValue(new THREE.Box3(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5)));
     levelManager.lives = 1;
     levelManager.score = 100; // Arbitrary score
 
