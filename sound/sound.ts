@@ -4,19 +4,38 @@ let masterVolume: number = 1.0; // Default master volume
 let preferredMusicVolume: number = 0.3; // Default preferred volume for music
 
 // Define sound assets (logical names and paths)
+// Updated to use downloaded Kenney CC0 audio assets
 export const SOUND_ASSETS = {
-  drawStart: { name: "drawStart", path: "assets/sounds/sfx_draw_start.wav" },
-  areaCapture: { name: "areaCapture", path: "assets/sounds/sfx_area_capture.wav" },
-  playerDeath: { name: "playerDeath", path: "assets/sounds/sfx_player_death.wav" },
-  powerupCollect: { name: "powerupCollect", path: "assets/sounds/sfx_powerup_collect.wav" },
-  powerupActivate: { name: "powerupActivate", path: "assets/sounds/sfx_powerup_activate.wav" },
-  fuseActivate: { name: "fuseActivate", path: "assets/sounds/sfx_fuse_activate.wav" },
-  gameOver: { name: "gameOver", path: "assets/sounds/sfx_game_over.wav" },
-  buttonClick: { name: "buttonClick", path: "assets/sounds/sfx_button_click.wav" },
-  levelUp: { name: "levelUp", path: "assets/sounds/sfx_level_up.wav" },
-  collision: { name: "collision", path: "assets/sounds/sfx_collision.wav" },
-  gameover: { name: "gameover", path: "assets/sounds/sfx_game_over.wav" },
+  drawStart: { name: "drawStart", path: "assets/sounds/draw_start.ogg" },
+  areaCapture: { name: "areaCapture", path: "assets/sounds/area_capture.ogg" },
+  playerDeath: { name: "playerDeath", path: "assets/sounds/collision.ogg" },
+  powerupCollect: { name: "powerupCollect", path: "assets/sounds/powerup_collect.ogg" },
+  powerupActivate: { name: "powerupActivate", path: "assets/sounds/powerup_collect.ogg" },
+  fuseActivate: { name: "fuseActivate", path: "assets/sounds/collision.ogg" },
+  gameOver: { name: "gameOver", path: "assets/sounds/game_over.ogg" },
+  buttonClick: { name: "buttonClick", path: "assets/sounds/button_click.ogg" },
+  levelUp: { name: "levelUp", path: "assets/sounds/level_up.ogg" },
+  collision: { name: "collision", path: "assets/sounds/collision.ogg" },
+  gameover: { name: "gameover", path: "assets/sounds/game_over.ogg" },
 };
+
+// Music playlists
+export const MUSIC_PLAYLISTS = {
+  hype: [
+    'assets/music/hype/track1.ogg',
+    'assets/music/hype/track2.ogg',
+    'assets/music/hype/track3.ogg',
+  ],
+  chill: [
+    'assets/music/chill/track1.ogg',
+    'assets/music/chill/track2.ogg',
+    'assets/music/chill/track3.ogg',
+  ],
+};
+
+export type MusicMode = 'hype' | 'chill' | 'off';
+let currentMusicMode: MusicMode = 'off';
+let currentTrackIndex = 0;
 
 export function preloadSound(soundNameKey: keyof typeof SOUND_ASSETS): Promise<void> {
   const soundAsset = SOUND_ASSETS[soundNameKey];
@@ -175,9 +194,88 @@ export function stopCurrentMusic(): void {
 }
 
 export function playStandardMusic(): void {
-    loadAndPlayMusic('assets/music/background_standard.mp3', true, 0.3);
+    // Use hype playlist track 1 for standard gameplay
+    if (currentMusicMode !== 'hype') {
+      setMusicMode('hype');
+    }
 }
 
 export function playTenseMusic(): void {
-    loadAndPlayMusic('assets/music/background_tense.mp3', true, 0.4);
+    // Use hype playlist for tense moments
+    if (currentMusicMode !== 'hype') {
+      setMusicMode('hype');
+    }
+}
+
+// --- Playlist Music Functions ---
+
+export function setMusicMode(mode: MusicMode): void {
+    currentMusicMode = mode;
+    currentTrackIndex = 0;
+
+    if (mode === 'off') {
+      stopMusic();
+      return;
+    }
+
+    const playlist = MUSIC_PLAYLISTS[mode];
+    if (playlist && playlist.length > 0) {
+      playPlaylistTrack(playlist[currentTrackIndex]);
+    }
+
+    console.log(`Music mode set to: ${mode}`);
+}
+
+export function getMusicMode(): MusicMode {
+    return currentMusicMode;
+}
+
+function playPlaylistTrack(trackPath: string): void {
+    if (backgroundMusic) {
+      stopMusic();
+    }
+
+    backgroundMusic = new Audio(trackPath);
+    backgroundMusic.loop = false; // We'll handle track cycling ourselves
+    backgroundMusic.volume = Math.max(0, Math.min(1, masterVolume * preferredMusicVolume));
+
+    // When track ends, play next track in playlist
+    backgroundMusic.addEventListener('ended', () => {
+      if (currentMusicMode !== 'off') {
+        nextTrack();
+      }
+    });
+
+    backgroundMusic.play().then(() => {
+      console.log(`Playing track: ${trackPath}`);
+    }).catch(error => console.warn(`Error playing music track:`, error));
+}
+
+export function nextTrack(): void {
+    if (currentMusicMode === 'off') return;
+
+    const playlist = MUSIC_PLAYLISTS[currentMusicMode];
+    if (!playlist || playlist.length === 0) return;
+
+    currentTrackIndex = (currentTrackIndex + 1) % playlist.length;
+    playPlaylistTrack(playlist[currentTrackIndex]);
+}
+
+export function previousTrack(): void {
+    if (currentMusicMode === 'off') return;
+
+    const playlist = MUSIC_PLAYLISTS[currentMusicMode];
+    if (!playlist || playlist.length === 0) return;
+
+    currentTrackIndex = (currentTrackIndex - 1 + playlist.length) % playlist.length;
+    playPlaylistTrack(playlist[currentTrackIndex]);
+}
+
+export function getCurrentTrackInfo(): { mode: MusicMode; track: number; total: number } {
+    const playlist = currentMusicMode !== 'off' ? MUSIC_PLAYLISTS[currentMusicMode] : [];
+    return {
+      mode: currentMusicMode,
+      track: currentTrackIndex + 1,
+      total: playlist.length
+    };
 }

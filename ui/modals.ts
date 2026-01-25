@@ -2,17 +2,56 @@
  * Modal interaction utilities
  */
 
+import { createMusicPlayer, updateMusicPlayerUI } from './musicPlayer';
+import { showTutorialFromSettings } from './tutorial';
+
 /**
  * Enhances modal interaction with event listeners
  * Call this once during initialization
  */
 export function enhanceModalInteraction(): void {
   const modal = document.getElementById('settings-modal');
+  const modalContent = modal?.querySelector('.modal-content');
   const closeBtn = document.getElementById('close-settings');
   const levelUpBtn = document.getElementById('level-up');
   const darkModeCheckbox = document.getElementById('darkMode') as HTMLInputElement | null;
   const casualModeCheckbox = document.getElementById('casualMode') as HTMLInputElement | null;
   const crtFilterCheckbox = document.getElementById('crtFilter') as HTMLInputElement | null;
+
+  // Add music player to modal
+  if (modalContent) {
+    const musicPlayer = createMusicPlayer();
+    modalContent.insertBefore(musicPlayer, closeBtn?.parentElement || null);
+
+    // Add tutorial reset button
+    const tutorialBtn = document.createElement('button');
+    tutorialBtn.id = 'show-tutorial';
+    tutorialBtn.textContent = 'Show Tutorial';
+    tutorialBtn.style.cssText = `
+      margin-top: 10px;
+      margin-right: 10px;
+      padding: 8px 15px;
+      background: transparent;
+      border: 1px solid #00ffff;
+      color: #00ffff;
+      font-family: inherit;
+      cursor: pointer;
+      border-radius: 3px;
+    `;
+    tutorialBtn.addEventListener('click', () => {
+      if (modal) modal.classList.add('hidden');
+      showTutorialFromSettings();
+    });
+    closeBtn?.parentElement?.insertBefore(tutorialBtn, closeBtn);
+  }
+
+  // Update music player when modal is opened
+  const settingsButton = document.getElementById('settings-button');
+  if (settingsButton) {
+    settingsButton.addEventListener('click', () => {
+      updateMusicPlayerUI();
+    });
+  }
 
   // Close button
   if (closeBtn) {

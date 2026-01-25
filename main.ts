@@ -29,6 +29,8 @@ import { GameState, createInitialGameState, updateHUD, cacheHUDElements } from '
 import { createDebugInfo, getDebugDiv, updateDebugInfo } from './ui/debug';
 import { showGameOverScreen, hideGameOverScreen, cacheGameOverElements, getRestartButton } from './ui/gameOverScreen';
 import { enhanceModalInteraction } from './ui/modals';
+import { showFeedbackMessage } from './ui/feedbackMessages';
+import { shouldShowTutorial, startTutorial } from './ui/tutorial';
 
 // Global variables
 interface CapturedAreaData {
@@ -45,6 +47,7 @@ let running = true;
 let spacebarWasPressed = false;
 let isDrawing = false;
 let currentTrailDrawMode: DrawMode = 'fast'; // Track draw mode for current trail
+let lastBoundaryWarningTime = 0; // Throttle boundary warning messages
 
 // Use centralized config values
 const gridLimit = GRID_LIMIT;
@@ -402,7 +405,11 @@ function animate() {
   // Check for spacebar press to start drawing
   // Hold Shift + Spacebar for slow draw (2x points, half speed)
   if (keys[' '] && !spacebarWasPressed && !isDrawing) { // Check !isDrawing to prevent re-triggering
-    const onBoundary = Math.abs(player.position.x) >= gridLimit || Math.abs(player.position.y) >= gridLimit;
+    // Use epsilon tolerance for floating-point boundary detection
+    const onBoundaryX = Math.abs(Math.abs(player.position.x) - gridLimit) < BOUNDARY_TOLERANCE;
+    const onBoundaryY = Math.abs(Math.abs(player.position.y) - gridLimit) < BOUNDARY_TOLERANCE;
+    const onBoundary = onBoundaryX || onBoundaryY;
+
     if (onBoundary) {
       isDrawing = true;
       timeTrailOpen = 0.0; // Reset fuse timer
@@ -415,6 +422,13 @@ function animate() {
       clearTrail(scene); // Clear any previous partial trail
       initTrail(scene);
       playSound('drawStart');
+    } else {
+      // Show feedback message when player tries to draw but isn't on boundary
+      const currentTime = performance.now();
+      if (currentTime - lastBoundaryWarningTime > 2000) { // Throttle to once per 2 seconds
+        showFeedbackMessage('Move to the edge to start drawing!', 1500);
+        lastBoundaryWarningTime = currentTime;
+      }
     }
   }
 
@@ -422,7 +436,10 @@ function animate() {
   if (!keys[' '] && spacebarWasPressed && isDrawing) { // Spacebar was released while drawing
     isDrawing = false;
     fuseActiveOnTrail = false; // Reset fuse active flag
-    const onBoundary = Math.abs(player.position.x) >= gridLimit || Math.abs(player.position.y) >= gridLimit;
+    // Use epsilon tolerance for floating-point boundary detection
+    const onBoundaryX = Math.abs(Math.abs(player.position.x) - gridLimit) < BOUNDARY_TOLERANCE;
+    const onBoundaryY = Math.abs(Math.abs(player.position.y) - gridLimit) < BOUNDARY_TOLERANCE;
+    const onBoundary = onBoundaryX || onBoundaryY;
     if (onBoundary) {
       // --- Start of Capture Logic ---
       const playerTrailFull = getTrailPoints();
@@ -757,9 +774,19 @@ window.onload = () => {
   
   // Log initialization
   console.log('Game initialized');
-  
-  // Start the animation loop
-  console.log('Starting animation loop...');
-  running = true;
-  animate();
+
+  // Check if tutorial should be shown
+  if (shouldShowTutorial()) {
+    console.log('Showing tutorial for new player...');
+    startTutorial(() => {
+      console.log('Tutorial completed, starting game...');
+      running = true;
+      animate();
+    });
+  } else {
+    // Start the animation loop directly
+    console.log('Starting animation loop...');
+    running = true;
+    animate();
+  }
 };
