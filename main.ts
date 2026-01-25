@@ -736,10 +736,14 @@ window.onload = () => {
   // Set up event listeners
   window.addEventListener('resize', handleResize);
   
-  // Enhance modal interaction
+  // Enhance modal interaction (wrapped in try-catch to prevent blocking game start)
   console.log('Enhancing modal interaction...');
-  enhanceModalInteraction();
-  
+  try {
+    enhanceModalInteraction();
+  } catch (e) {
+    console.error('Error enhancing modal interaction:', e);
+  }
+
   // Expose game state globally for debugging
   (window as any).gameState = gameState;
 
@@ -776,16 +780,22 @@ window.onload = () => {
   console.log('Game initialized');
 
   // Check if tutorial should be shown
-  if (shouldShowTutorial()) {
-    console.log('Showing tutorial for new player...');
-    startTutorial(() => {
-      console.log('Tutorial completed, starting game...');
+  try {
+    if (shouldShowTutorial()) {
+      console.log('Showing tutorial for new player...');
+      startTutorial(() => {
+        console.log('Tutorial completed, starting game...');
+        running = true;
+        animate();
+      });
+    } else {
+      // Start the animation loop directly
+      console.log('Starting animation loop...');
       running = true;
       animate();
-    });
-  } else {
-    // Start the animation loop directly
-    console.log('Starting animation loop...');
+    }
+  } catch (e) {
+    console.error('Error with tutorial, starting game directly:', e);
     running = true;
     animate();
   }

@@ -18,12 +18,12 @@ export function enhanceModalInteraction(): void {
   const casualModeCheckbox = document.getElementById('casualMode') as HTMLInputElement | null;
   const crtFilterCheckbox = document.getElementById('crtFilter') as HTMLInputElement | null;
 
-  // Add music player to modal
-  if (modalContent) {
+  // Add music player to modal (insert before close button)
+  if (modalContent && closeBtn) {
     const musicPlayer = createMusicPlayer();
-    modalContent.insertBefore(musicPlayer, closeBtn?.parentElement || null);
+    modalContent.insertBefore(musicPlayer, closeBtn);
 
-    // Add tutorial reset button
+    // Add tutorial reset button before close button
     const tutorialBtn = document.createElement('button');
     tutorialBtn.id = 'show-tutorial';
     tutorialBtn.textContent = 'Show Tutorial';
@@ -42,7 +42,7 @@ export function enhanceModalInteraction(): void {
       if (modal) modal.classList.add('hidden');
       showTutorialFromSettings();
     });
-    closeBtn?.parentElement?.insertBefore(tutorialBtn, closeBtn);
+    modalContent.insertBefore(tutorialBtn, closeBtn);
   }
 
   // Update music player when modal is opened
