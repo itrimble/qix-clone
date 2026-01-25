@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { createTrailMaterial } from './materials';
+import { FAST_DRAW_COLOR, SLOW_DRAW_COLOR } from './config';
 
 export const MAX_TRAIL_POINTS = 500;
+
+// Draw mode type
+export type DrawMode = 'fast' | 'slow';
 
 // Module-scoped variables for the trail state
 let trailPoints: THREE.Vector3[] = []; // Stores the Vector3 points for easy access/copying
@@ -9,6 +13,7 @@ let trailLine: THREE.Line | null = null;
 let trailMaterial: THREE.LineBasicMaterial;
 let currentTrailLength = 0; // Number of points currently in the trail
 let positionBuffer: Float32Array | null = null; // The actual buffer for THREE.js
+let currentDrawMode: DrawMode = 'fast'; // Current drawing mode
 
 export function initTrail(scene: THREE.Scene): void {
   trailPoints = [];
@@ -82,4 +87,25 @@ export function getTrailPoints(): THREE.Vector3[] {
 
 export function clearTrail(scene: THREE.Scene): void {
   destroyTrail(scene);
+}
+
+/** Set the current draw mode (fast or slow) and update trail color */
+export function setDrawMode(mode: DrawMode): void {
+  currentDrawMode = mode;
+  if (trailMaterial) {
+    trailMaterial.color.setHex(mode === 'slow' ? SLOW_DRAW_COLOR : FAST_DRAW_COLOR);
+  }
+}
+
+/** Get the current draw mode */
+export function getDrawMode(): DrawMode {
+  return currentDrawMode;
+}
+
+/** Reset draw mode to fast (default) */
+export function resetDrawMode(): void {
+  currentDrawMode = 'fast';
+  if (trailMaterial) {
+    trailMaterial.color.setHex(FAST_DRAW_COLOR);
+  }
 }

@@ -120,6 +120,28 @@ export const STORAGE_KEY_HIGH_SCORE = 'qixCloneGame_highScore';
 export const STORAGE_KEY_MAX_AREA = 'qixCloneGame_maxAreaCaptured';
 
 // =============================================================================
+// STIX DRAWING (Classic Qix dual-speed system)
+// =============================================================================
+
+/** Fast draw stix color (blue) */
+export const FAST_DRAW_COLOR = 0x0088ff;
+
+/** Slow draw stix color (orange-red) */
+export const SLOW_DRAW_COLOR = 0xff4400;
+
+/** Fast draw captured area fill color (blue) */
+export const FAST_CAPTURE_COLOR = 0x0066cc;
+
+/** Slow draw captured area fill color (orange-red) */
+export const SLOW_CAPTURE_COLOR = 0xcc3300;
+
+/** Speed multiplier when slow drawing (half speed) */
+export const SLOW_DRAW_SPEED_MULTIPLIER = 0.5;
+
+/** Point multiplier for slow draw captures (2x points) */
+export const SLOW_DRAW_POINT_MULTIPLIER = 2;
+
+// =============================================================================
 // VISUAL
 // =============================================================================
 

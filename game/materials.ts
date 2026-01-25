@@ -63,15 +63,18 @@ export function setMaterialEmissive(material: THREE.Material, color: THREE.Color
 
 // --- Existing code below ---
 
+import { FAST_DRAW_COLOR } from './config';
+
 /**
  * Creates a glowing trail material for the player.
+ * Defaults to fast draw color (blue) - color is updated by setDrawMode() in trail.ts
  */
 export function createTrailMaterial(): THREE.LineBasicMaterial {
   return new THREE.LineBasicMaterial({
-    color: 0x00ffff,
+    color: FAST_DRAW_COLOR,
     linewidth: 2,
     transparent: true,
-    opacity: 0.75
+    opacity: 0.85
   });
 }
 

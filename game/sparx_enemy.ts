@@ -47,12 +47,23 @@ export class SparxEnemy {
     this._gridLimit = gridLimitValue;
     this._corners = boundaryCorners; // Store [BL, BR, TR, TL]
 
-    // Initialize originalColor based on the material's color
+    // Initialize with glowing Phong material for classic Qix look
     const geometry = new THREE.BoxGeometry(SPARX_SIZE, SPARX_SIZE, SPARX_SIZE);
-    const material = new THREE.MeshBasicMaterial({ color: SPARX_COLOR }); // SPARX_COLOR is const
+    const material = new THREE.MeshPhongMaterial({
+      color: SPARX_COLOR,
+      emissive: SPARX_COLOR,
+      emissiveIntensity: 0.5,
+      shininess: 80
+    });
     this.mesh = new THREE.Mesh(geometry, material);
+
+    // Add wireframe edges for visual clarity
+    const edges = new THREE.EdgesGeometry(geometry);
+    const edgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+    const wireframe = new THREE.LineSegments(edges, edgeMaterial);
+    this.mesh.add(wireframe);
+
     this.mesh.position.set(this.position.x, this.position.y, 0);
-    // this.originalColor is already initialized with SPARX_COLOR
   }
 
   public activateFuseMode(trail: THREE.Vector2[]): void {
@@ -68,8 +79,9 @@ export class SparxEnemy {
     this.mesh.position.set(this.position.x, this.position.y, 0);
     this.currentTargetTrailPointIndex = (this.currentTrailPoints.length > 1) ? 1 : 0;
 
-    if (this.mesh.material instanceof THREE.MeshBasicMaterial) {
+    if (this.mesh.material instanceof THREE.MeshPhongMaterial) {
       this.mesh.material.color.copy(this.fuseColorVal);
+      this.mesh.material.emissive.copy(this.fuseColorVal);
     }
     console.log("Sparx activated Fuse mode.");
   }
@@ -120,8 +132,9 @@ export class SparxEnemy {
     this.currentTrailPoints = null;
     this.currentTargetTrailPointIndex = 0;
 
-    if (this.mesh.material instanceof THREE.MeshBasicMaterial) {
+    if (this.mesh.material instanceof THREE.MeshPhongMaterial) {
       this.mesh.material.color.copy(this.originalColor);
+      this.mesh.material.emissive.copy(this.originalColor);
     }
     console.log("Sparx deactivated Fuse mode.");
     this.snapToNearestBoundary();

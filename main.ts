@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { initControls, keys } from './ui/controls';
-import { initTrail, updateTrail, clearTrail, getTrailPoints } from './game/trail';
+import { initTrail, updateTrail, clearTrail, getTrailPoints, setDrawMode, getDrawMode, resetDrawMode, DrawMode } from './game/trail';
 import { createScene, updateScene, player } from './game/engine';
 import { segmentsIntersect, createOrderedCorners, calculateQixPolygons } from './game/geometryUtils';
 import { QixEnemy } from './game/qix_enemy';
@@ -19,7 +19,11 @@ import {
     QIX_PUSH_MARGIN,
     INITIAL_LIVES,
     PLAYER_SPARX_COLLISION_THRESHOLD,
-    BOUNDARY_TOLERANCE
+    BOUNDARY_TOLERANCE,
+    SLOW_DRAW_SPEED_MULTIPLIER,
+    SLOW_DRAW_POINT_MULTIPLIER,
+    FAST_CAPTURE_COLOR,
+    SLOW_CAPTURE_COLOR
 } from './game/config';
 import { GameState, createInitialGameState, updateHUD, cacheHUDElements } from './game/gameState';
 import { createDebugInfo, getDebugDiv, updateDebugInfo } from './ui/debug';
@@ -40,6 +44,7 @@ let lastTime = performance.now();
 let running = true;
 let spacebarWasPressed = false;
 let isDrawing = false;
+let currentTrailDrawMode: DrawMode = 'fast'; // Track draw mode for current trail
 
 // Use centralized config values
 const gridLimit = GRID_LIMIT;
@@ -303,7 +308,12 @@ function animate() {
   // lastTime is updated later, before rendering debug info.
   
   // Update game state
-  updateScene(scene, playerSpeedMultiplier.value);
+  // Apply slow draw speed multiplier when drawing in slow mode
+  let effectiveSpeedMultiplier = playerSpeedMultiplier.value;
+  if (isDrawing && currentTrailDrawMode === 'slow') {
+    effectiveSpeedMultiplier *= SLOW_DRAW_SPEED_MULTIPLIER;
+  }
+  updateScene(scene, effectiveSpeedMultiplier);
 
   // Update Qix Enemy
   if (qix) {
@@ -390,12 +400,18 @@ function animate() {
   }
 
   // Check for spacebar press to start drawing
+  // Hold Shift + Spacebar for slow draw (2x points, half speed)
   if (keys[' '] && !spacebarWasPressed && !isDrawing) { // Check !isDrawing to prevent re-triggering
     const onBoundary = Math.abs(player.position.x) >= gridLimit || Math.abs(player.position.y) >= gridLimit;
     if (onBoundary) {
       isDrawing = true;
       timeTrailOpen = 0.0; // Reset fuse timer
       fuseActiveOnTrail = false; // Reset fuse active flag for this trail
+
+      // Determine draw mode based on shift key
+      currentTrailDrawMode = (keys['shift'] || keys['Shift']) ? 'slow' : 'fast';
+      setDrawMode(currentTrailDrawMode);
+
       clearTrail(scene); // Clear any previous partial trail
       initTrail(scene);
       playSound('drawStart');
@@ -438,7 +454,15 @@ function animate() {
             const shape = new THREE.Shape(chosenPolygonVertices);
             updateQixConfinementOnCapture(shape);
             const geometry = new THREE.ShapeGeometry(shape);
-            const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+
+            // Color based on draw mode (classic Qix style)
+            const captureColor = currentTrailDrawMode === 'slow' ? SLOW_CAPTURE_COLOR : FAST_CAPTURE_COLOR;
+            const material = new THREE.MeshPhongMaterial({
+              color: captureColor,
+              side: THREE.DoubleSide,
+              transparent: true,
+              opacity: 0.7 // More solid like classic Qix
+            });
             const capturedMesh = new THREE.Mesh(geometry, material);
             scene.add(capturedMesh);
             capturedAreaDataList.push({ mesh: capturedMesh, shape: shape });
@@ -457,7 +481,10 @@ function animate() {
             const newlyCapturedPercent = (actualFilledArea / totalGameArea) * 100;
             gameState.captured += newlyCapturedPercent;
             gameState.captured = Math.min(gameState.captured, 100);
-            gameState.score += Math.round(actualFilledArea);
+
+            // Apply point multiplier for slow draw (2x points like classic Qix)
+            const pointMultiplier = currentTrailDrawMode === 'slow' ? SLOW_DRAW_POINT_MULTIPLIER : 1;
+            gameState.score += Math.round(actualFilledArea * pointMultiplier);
           }
         }
       }

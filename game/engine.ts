@@ -89,19 +89,42 @@ export function createScene(canvas: HTMLCanvasElement) {
   const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x00ffff, 0x004444);
   gridHelper.rotation.x = Math.PI / 2; // Rotate to XY plane
   scene.add(gridHelper);
+
+  // Add prominent boundary rectangle (classic Qix style)
+  const boundaryPoints = [
+    new THREE.Vector3(-gridLimit, -gridLimit, 0.1),
+    new THREE.Vector3(gridLimit, -gridLimit, 0.1),
+    new THREE.Vector3(gridLimit, gridLimit, 0.1),
+    new THREE.Vector3(-gridLimit, gridLimit, 0.1),
+    new THREE.Vector3(-gridLimit, -gridLimit, 0.1), // Close the loop
+  ];
+  const boundaryGeometry = new THREE.BufferGeometry().setFromPoints(boundaryPoints);
+  const boundaryMaterial = new THREE.LineBasicMaterial({
+    color: 0x00ffff,
+    linewidth: 2 // Note: linewidth > 1 only works on some systems
+  });
+  const boundaryLine = new THREE.Line(boundaryGeometry, boundaryMaterial);
+  scene.add(boundaryLine);
   
   // Add background elements
   const starfield = createStarfield(1000);
   scene.add(starfield);
   
-  // Create player cube - make it larger and more visible
-  const geometry = new THREE.BoxGeometry(2, 2, 2);
-  const material = new THREE.MeshPhongMaterial({ 
-    color: 0x00ff00,
-    emissive: 0x003300, // Slight glow
-    shininess: 30
+  // Create player as 3D diamond (octahedron) - classic Qix style
+  const geometry = new THREE.OctahedronGeometry(1.2, 0);
+  const material = new THREE.MeshPhongMaterial({
+    color: 0x00ffff, // Cyan like classic Qix
+    emissive: 0x004444, // Subtle glow
+    shininess: 80
   });
   player = new THREE.Mesh(geometry, material);
+
+  // Add wireframe edges for visual clarity
+  const edges = new THREE.EdgesGeometry(geometry);
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+  const wireframe = new THREE.LineSegments(edges, edgeMaterial);
+  player.add(wireframe);
+
   scene.add(player);
   
   // Move player to a visible starting position
@@ -136,9 +159,9 @@ export function updateScene(scene: THREE.Scene, speedMultiplier: number): void {
     // console.log('Moving RIGHT', player.position.x);
   }
   
-  // Add a small rotation to the player for visual feedback
-  player.rotation.x += 0.01;
-  player.rotation.y += 0.01;
+  // Smooth rotation for diamond player
+  player.rotation.y += 0.02;
+  player.rotation.z += 0.005;
   
   // Limit player movement to the grid
   player.position.x = Math.max(-gridLimit, Math.min(gridLimit, player.position.x));
